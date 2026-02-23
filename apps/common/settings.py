@@ -15,6 +15,8 @@ def _as_bool(value: str, default: bool = False) -> bool:
 @dataclass(frozen=True)
 class Settings:
     orchestrator_url: str = os.getenv("ORCHESTRATOR_URL", "http://localhost:8001")
+    worker_service_url: str = os.getenv("WORKER_SERVICE_URL", "http://localhost:8002")
+    worker_internal_token: str = os.getenv("WORKER_INTERNAL_TOKEN", "")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))
     postgres_db: str = os.getenv("POSTGRES_DB", "moviematch")

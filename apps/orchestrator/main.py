@@ -2,6 +2,7 @@ import asyncio
 import logging
 from uuid import uuid4
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,6 +31,34 @@ install_observability(app, service_name="orchestrator")
 logger = logging.getLogger("orchestrator")
 worker = RecommendationWorker()
 cache = CacheClient()
+
+
+async def _call_worker_service(mode: RecommendationMode, payload: RecommendationRequest) -> RecommendationResponse:
+    url = f"{settings.worker_service_url}/run/{mode.value}"
+    headers = {}
+    if settings.worker_internal_token:
+        headers["X-Worker-Token"] = settings.worker_internal_token
+
+    response: httpx.Response | None = None
+    async with httpx.AsyncClient(timeout=settings.external_request_timeout_seconds) as client:
+        last_exc: Exception | None = None
+        for attempt in range(1, settings.external_request_retry_attempts + 1):
+            try:
+                response = await client.post(url, json=payload.model_dump(), headers=headers)
+                response.raise_for_status()
+                break
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                logger.warning(
+                    "worker_service_retry",
+                    extra={"attempt": attempt, "path": f"/run/{mode.value}"},
+                )
+                if attempt < settings.external_request_retry_attempts:
+                    await asyncio.sleep(settings.external_request_retry_backoff_seconds * attempt)
+
+    if response is None:
+        raise RuntimeError(f"Worker service unavailable: {last_exc}")
+    return RecommendationResponse.model_validate(response.json())
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -83,10 +112,11 @@ async def recommendations(
     last_exc: Exception | None = None
     for attempt in range(1, settings.worker_retry_attempts + 1):
         try:
-            recommendations_list = await asyncio.wait_for(
-                asyncio.to_thread(worker.run, db, mode, payload),
+            worker_response = await asyncio.wait_for(
+                _call_worker_service(mode=mode, payload=payload),
                 timeout=settings.worker_timeout_seconds,
             )
+            recommendations_list = worker_response.recommendations
             break
         except Exception as exc:
             last_exc = exc
@@ -100,6 +130,15 @@ async def recommendations(
             )
             if attempt < settings.worker_retry_attempts:
                 await asyncio.sleep(settings.worker_retry_backoff_seconds * attempt)
+
+    if not recommendations_list:
+        try:
+            recommendations_list = await asyncio.wait_for(
+                asyncio.to_thread(worker.run, db, mode, payload),
+                timeout=settings.worker_timeout_seconds,
+            )
+        except Exception as exc:
+            last_exc = exc
 
     if not recommendations_list and mode != RecommendationMode.collaborative:
         try:

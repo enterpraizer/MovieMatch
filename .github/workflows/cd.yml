@@ -58,6 +58,18 @@ jobs:
           echo "Staging healthcheck failed"
           exit 1
 
+      - name: Run staging smoke check (optional)
+        if: ${{ secrets.STAGING_SMOKE_BASE_URL != '' }}
+        env:
+          STAGING_SMOKE_BASE_URL: ${{ secrets.STAGING_SMOKE_BASE_URL }}
+          STAGING_SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+          STAGING_SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+        run: |
+          python scripts/smoke_check_staging.py \
+            --base-url "$STAGING_SMOKE_BASE_URL" \
+            --email "${STAGING_SMOKE_EMAIL:-staging-smoke@moviematch.local}" \
+            --password "${STAGING_SMOKE_PASSWORD:-moviematch}"
+
       - name: No staging hooks configured
         if: ${{ secrets.STAGING_RENDER_DEPLOY_HOOK_URL == '' && secrets.STAGING_RAILWAY_DEPLOY_HOOK_URL == '' }}
         run: |
@@ -89,6 +101,25 @@ jobs:
         env:
           DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_RAILWAY_DEPLOY_HOOK_URL }}
         run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Require successful staging smoke setup
+        if: ${{ secrets.STAGING_SMOKE_BASE_URL == '' }}
+        run: |
+          echo "STAGING_SMOKE_BASE_URL is required before production deploy."
+          echo "Set staging smoke secrets and rerun."
+          exit 1
+
+      - name: Verify staging smoke before production
+        if: ${{ secrets.STAGING_SMOKE_BASE_URL != '' }}
+        env:
+          STAGING_SMOKE_BASE_URL: ${{ secrets.STAGING_SMOKE_BASE_URL }}
+          STAGING_SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+          STAGING_SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+        run: |
+          python scripts/smoke_check_staging.py \
+            --base-url "$STAGING_SMOKE_BASE_URL" \
+            --email "${STAGING_SMOKE_EMAIL:-staging-smoke@moviematch.local}" \
+            --password "${STAGING_SMOKE_PASSWORD:-moviematch}"
 
       - name: Verify production healthcheck (optional)
         if: ${{ secrets.PRODUCTION_HEALTHCHECK_URL != '' }}
