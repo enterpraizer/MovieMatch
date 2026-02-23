@@ -183,6 +183,13 @@ curl http://localhost:8001/metrics | head
 ./scripts/staging_bootstrap.sh
 ```
 
+Перед staging/prod обязательно задать секреты в `.env`:
+
+```env
+JWT_SECRET_KEY=<strong-random-secret>
+WORKER_INTERNAL_TOKEN=<internal-service-token>
+```
+
 Что делает bootstrap:
 1. Поднимает staging compose stack
 2. Применяет миграции (`alembic upgrade head`)
