@@ -57,3 +57,15 @@ class RecommendationResponse(BaseModel):
     mode: RecommendationMode
     recommendations: list[MovieRecommendation]
     trace_id: str
+
+
+class RecommendationJobSubmitResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class RecommendationJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    result: RecommendationResponse | None = None
+    error: str | None = None

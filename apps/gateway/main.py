@@ -15,10 +15,11 @@ from apps.common.schemas import (
     HealthResponse,
     LoginRequest,
     LoginResponse,
+    RecommendationJobStatusResponse,
+    RecommendationJobSubmitResponse,
     RefreshRequest,
     RecommendationMode,
     RecommendationRequest,
-    RecommendationResponse,
     TokenPayload,
 )
 from apps.common.settings import settings
@@ -68,13 +69,13 @@ async def refresh(payload: RefreshRequest) -> LoginResponse:
     return create_token_pair(user_id=int(token_payload.sub), email=token_payload.email)
 
 
-@app.post("/recommendations/{mode}", response_model=RecommendationResponse)
+@app.post("/recommendations/{mode}", response_model=RecommendationJobSubmitResponse, status_code=202)
 async def recommendations(
     mode: RecommendationMode,
     payload: RecommendationRequest,
     request: Request,
     token_payload: TokenPayload = Depends(require_access_token),
-) -> RecommendationResponse:
+) -> RecommendationJobSubmitResponse:
     payload.user_id = payload.user_id or int(token_payload.sub)
     url = f"{settings.orchestrator_url}/recommendations/{mode.value}"
     headers = {}
@@ -105,4 +106,33 @@ async def recommendations(
         if response is None:
             raise HTTPException(status_code=502, detail=f"Orchestrator unavailable: {last_exc}") from last_exc
 
-    return RecommendationResponse.model_validate(response.json())
+    return RecommendationJobSubmitResponse.model_validate(response.json())
+
+
+@app.get("/recommendations/jobs/{job_id}", response_model=RecommendationJobStatusResponse)
+async def recommendation_job_status(
+    job_id: str,
+    request: Request,
+    token_payload: TokenPayload = Depends(require_access_token),  # noqa: ARG001
+) -> RecommendationJobStatusResponse:
+    url = f"{settings.orchestrator_url}/recommendations/jobs/{job_id}"
+    headers = {}
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    async with httpx.AsyncClient(timeout=settings.external_request_timeout_seconds) as client:
+        response: httpx.Response | None = None
+        last_exc: Exception | None = None
+        for attempt in range(1, settings.external_request_retry_attempts + 1):
+            try:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                break
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                if attempt < settings.external_request_retry_attempts:
+                    await asyncio.sleep(settings.external_request_retry_backoff_seconds * attempt)
+        if response is None:
+            raise HTTPException(status_code=502, detail=f"Orchestrator unavailable: {last_exc}") from last_exc
+    return RecommendationJobStatusResponse.model_validate(response.json())

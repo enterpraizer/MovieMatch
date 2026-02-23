@@ -85,8 +85,39 @@ export function App() {
     }
 
     const payload = await response.json()
-    setRecommendations(payload.recommendations ?? [])
-    setStatus(`Done: ${payload.recommendations?.length ?? 0} items`)
+    const jobId: string | undefined = payload.job_id
+    if (!jobId) {
+      setStatus('Recommendation failed: no job_id')
+      return
+    }
+
+    setStatus(`Job queued: ${jobId}`)
+    const deadline = Date.now() + 60000
+    while (Date.now() < deadline) {
+      const statusResp = await fetch(`${API_BASE}/recommendations/jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!statusResp.ok) {
+        setStatus(`Status check failed: ${statusResp.status}`)
+        return
+      }
+      const statusPayload = await statusResp.json()
+      if (statusPayload.status === 'completed') {
+        const items = statusPayload.result?.recommendations ?? []
+        setRecommendations(items)
+        setStatus(`Done: ${items.length} items`)
+        return
+      }
+      if (statusPayload.status === 'failed') {
+        setStatus(`Job failed: ${statusPayload.error ?? 'unknown error'}`)
+        setRecommendations([])
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+
+    setStatus('Recommendation job timed out')
+    setRecommendations([])
   }
 
   return (

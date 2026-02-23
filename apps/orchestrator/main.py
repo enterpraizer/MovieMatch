@@ -1,14 +1,11 @@
-import asyncio
 import logging
-from uuid import uuid4
 
-import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from celery.result import AsyncResult
+from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.common.auth import create_token_pair, decode_token, hash_password, require_access_token, verify_password
-from apps.common.cache import CacheClient
 from apps.common.db.models import User
 from apps.common.db.session import get_db
 from apps.common.observability import install_observability
@@ -17,59 +14,43 @@ from apps.common.schemas import (
     LoginRequest,
     LoginResponse,
     RefreshRequest,
+    RecommendationJobStatusResponse,
+    RecommendationJobSubmitResponse,
     RecommendationMode,
     RecommendationRequest,
     RecommendationResponse,
     TokenPayload,
 )
 from apps.common.settings import settings
-from apps.orchestrator.recommender import persist_recommendation_result
-from apps.workers.recommendation_worker import RecommendationWorker
+from apps.workers.celery_app import celery_app
+from apps.workers.celery_tasks import run_collaborative, run_mood, run_nlp
 
 app = FastAPI(title="MovieMatch Orchestrator", version="0.1.0")
 install_observability(app, service_name="orchestrator")
 logger = logging.getLogger("orchestrator")
-worker = RecommendationWorker()
-cache = CacheClient()
 
 
-def _worker_url_for_mode(mode: RecommendationMode) -> str:
+def _submit_recommendation_task(mode: RecommendationMode, payload: RecommendationRequest) -> str:
+    payload_data = payload.model_dump(mode="json")
     if mode == RecommendationMode.collaborative:
-        return settings.cf_worker_service_url
-    if mode == RecommendationMode.nlp:
-        return settings.nlp_worker_service_url
-    if mode == RecommendationMode.mood:
-        return settings.mood_worker_service_url
-    return settings.worker_service_url
+        task = run_collaborative.apply_async(args=[payload_data], queue="cf")
+    elif mode == RecommendationMode.nlp:
+        task = run_nlp.apply_async(args=[payload_data], queue="nlp")
+    else:
+        task = run_mood.apply_async(args=[payload_data], queue="mood")
+    return task.id
 
 
-async def _call_worker_service(mode: RecommendationMode, payload: RecommendationRequest) -> RecommendationResponse:
-    base_url = _worker_url_for_mode(mode)
-    url = f"{base_url}/run"
-    headers = {}
-    if settings.worker_internal_token:
-        headers["X-Worker-Token"] = settings.worker_internal_token
-
-    response: httpx.Response | None = None
-    async with httpx.AsyncClient(timeout=settings.external_request_timeout_seconds) as client:
-        last_exc: Exception | None = None
-        for attempt in range(1, settings.external_request_retry_attempts + 1):
-            try:
-                response = await client.post(url, json=payload.model_dump(), headers=headers)
-                response.raise_for_status()
-                break
-            except httpx.HTTPError as exc:
-                last_exc = exc
-                logger.warning(
-                    "worker_service_retry",
-                    extra={"attempt": attempt, "path": "/run"},
-                )
-                if attempt < settings.external_request_retry_attempts:
-                    await asyncio.sleep(settings.external_request_retry_backoff_seconds * attempt)
-
-    if response is None:
-        raise RuntimeError(f"Worker service unavailable: {last_exc}")
-    return RecommendationResponse.model_validate(response.json())
+def _map_celery_state(state: str) -> str:
+    mapping = {
+        "PENDING": "queued",
+        "RECEIVED": "queued",
+        "STARTED": "running",
+        "RETRY": "retry",
+        "SUCCESS": "completed",
+        "FAILURE": "failed",
+    }
+    return mapping.get(state, state.lower())
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -105,79 +86,28 @@ async def refresh(payload: RefreshRequest) -> LoginResponse:
     return create_token_pair(user_id=int(token_payload.sub), email=token_payload.email)
 
 
-@app.post("/recommendations/{mode}", response_model=RecommendationResponse)
+@app.post("/recommendations/{mode}", response_model=RecommendationJobSubmitResponse, status_code=202)
 async def recommendations(
     mode: RecommendationMode,
     payload: RecommendationRequest,
-    request: Request,
     token_payload: TokenPayload = Depends(require_access_token),
-    db: Session = Depends(get_db),
-) -> RecommendationResponse:
+) -> RecommendationJobSubmitResponse:
     payload.user_id = payload.user_id or int(token_payload.sub)
-    cache_key = f"rec:{mode.value}:{payload.user_id}:{payload.query or ''}:{payload.top_k}"
-    cached = cache.get_json(cache_key)
-    if cached:
-        return RecommendationResponse.model_validate(cached)
+    job_id = _submit_recommendation_task(mode=mode, payload=payload)
+    return RecommendationJobSubmitResponse(job_id=job_id, status="queued")
 
-    recommendations_list = []
-    last_exc: Exception | None = None
-    for attempt in range(1, settings.worker_retry_attempts + 1):
-        try:
-            worker_response = await asyncio.wait_for(
-                _call_worker_service(mode=mode, payload=payload),
-                timeout=settings.worker_timeout_seconds,
-            )
-            recommendations_list = worker_response.recommendations
-            break
-        except Exception as exc:
-            last_exc = exc
-            logger.warning(
-                "worker_retry",
-                extra={
-                    "trace_id": getattr(request.state, "trace_id", "n/a"),
-                    "attempt": attempt,
-                    "path": f"/recommendations/{mode.value}",
-                },
-            )
-            if attempt < settings.worker_retry_attempts:
-                await asyncio.sleep(settings.worker_retry_backoff_seconds * attempt)
 
-    if not recommendations_list:
-        try:
-            recommendations_list = await asyncio.wait_for(
-                asyncio.to_thread(worker.run, db, mode, payload),
-                timeout=settings.worker_timeout_seconds,
-            )
-        except Exception as exc:
-            last_exc = exc
+@app.get("/recommendations/jobs/{job_id}", response_model=RecommendationJobStatusResponse)
+async def recommendation_job_status(
+    job_id: str,
+    token_payload: TokenPayload = Depends(require_access_token),  # noqa: ARG001
+) -> RecommendationJobStatusResponse:
+    result = AsyncResult(job_id, app=celery_app)
+    mapped_status = _map_celery_state(result.state)
 
-    if not recommendations_list and mode != RecommendationMode.collaborative:
-        try:
-            fallback_payload = RecommendationRequest(
-                user_id=payload.user_id,
-                query=None,
-                top_k=payload.top_k,
-            )
-            recommendations_list = await asyncio.wait_for(
-                asyncio.to_thread(worker.run, db, RecommendationMode.collaborative, fallback_payload),
-                timeout=settings.worker_timeout_seconds,
-            )
-        except Exception:
-            pass
-
-    if not recommendations_list:
-        raise HTTPException(status_code=503, detail=f"Recommendation worker unavailable: {last_exc}")
-
-    persist_recommendation_result(db=db, mode=mode, payload=payload, recommendations=recommendations_list)
-    db.commit()
-    response = RecommendationResponse(
-        mode=mode,
-        recommendations=recommendations_list,
-        trace_id=str(uuid4()),
-    )
-    cache.set_json(
-        cache_key,
-        response.model_dump(mode="json"),
-        ttl_seconds=settings.recommendation_cache_ttl_seconds,
-    )
-    return response
+    if result.state == "SUCCESS":
+        payload = RecommendationResponse.model_validate(result.result)
+        return RecommendationJobStatusResponse(job_id=job_id, status=mapped_status, result=payload)
+    if result.state == "FAILURE":
+        return RecommendationJobStatusResponse(job_id=job_id, status=mapped_status, error=str(result.result))
+    return RecommendationJobStatusResponse(job_id=job_id, status=mapped_status)
