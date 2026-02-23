@@ -33,8 +33,19 @@ worker = RecommendationWorker()
 cache = CacheClient()
 
 
+def _worker_url_for_mode(mode: RecommendationMode) -> str:
+    if mode == RecommendationMode.collaborative:
+        return settings.cf_worker_service_url
+    if mode == RecommendationMode.nlp:
+        return settings.nlp_worker_service_url
+    if mode == RecommendationMode.mood:
+        return settings.mood_worker_service_url
+    return settings.worker_service_url
+
+
 async def _call_worker_service(mode: RecommendationMode, payload: RecommendationRequest) -> RecommendationResponse:
-    url = f"{settings.worker_service_url}/run/{mode.value}"
+    base_url = _worker_url_for_mode(mode)
+    url = f"{base_url}/run"
     headers = {}
     if settings.worker_internal_token:
         headers["X-Worker-Token"] = settings.worker_internal_token
@@ -51,7 +62,7 @@ async def _call_worker_service(mode: RecommendationMode, payload: Recommendation
                 last_exc = exc
                 logger.warning(
                     "worker_service_retry",
-                    extra={"attempt": attempt, "path": f"/run/{mode.value}"},
+                    extra={"attempt": attempt, "path": "/run"},
                 )
                 if attempt < settings.external_request_retry_attempts:
                     await asyncio.sleep(settings.external_request_retry_backoff_seconds * attempt)

@@ -16,6 +16,9 @@ def _as_bool(value: str, default: bool = False) -> bool:
 class Settings:
     orchestrator_url: str = os.getenv("ORCHESTRATOR_URL", "http://localhost:8001")
     worker_service_url: str = os.getenv("WORKER_SERVICE_URL", "http://localhost:8002")
+    cf_worker_service_url: str = os.getenv("CF_WORKER_SERVICE_URL", "http://localhost:8002")
+    nlp_worker_service_url: str = os.getenv("NLP_WORKER_SERVICE_URL", "http://localhost:8003")
+    mood_worker_service_url: str = os.getenv("MOOD_WORKER_SERVICE_URL", "http://localhost:8004")
     worker_internal_token: str = os.getenv("WORKER_INTERNAL_TOKEN", "")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))

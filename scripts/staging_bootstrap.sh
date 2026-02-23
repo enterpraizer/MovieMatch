@@ -15,10 +15,13 @@ docker compose -f docker-compose.staging.yml up -d --build
 
 docker compose -f docker-compose.staging.yml exec -T orchestrator alembic upgrade head
 
-# Load small sample dataset for smoke checks
-
-docker compose -f docker-compose.staging.yml exec -T orchestrator \
-  python scripts/ingest_sample_data.py --ratings-limit 5000 --imdb-limit 2000
+# Load small sample dataset for smoke checks (optional)
+if docker compose -f docker-compose.staging.yml exec -T orchestrator test -f data/raw/ml-25m/movies.csv; then
+  docker compose -f docker-compose.staging.yml exec -T orchestrator \
+    python scripts/ingest_sample_data.py --ratings-limit 5000 --imdb-limit 2000
+else
+  echo "Sample datasets are not present inside container image, skipping ingestion."
+fi
 
 # Smoke check
 
