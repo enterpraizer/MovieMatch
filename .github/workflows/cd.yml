@@ -1,0 +1,113 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging
+    if: |
+      github.ref_name == 'develop' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger Render staging deploy (optional)
+        if: ${{ secrets.STAGING_RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.STAGING_RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Trigger Railway staging deploy (optional)
+        if: ${{ secrets.STAGING_RAILWAY_DEPLOY_HOOK_URL != '' }}
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.STAGING_RAILWAY_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Verify staging healthcheck (optional)
+        if: ${{ secrets.STAGING_HEALTHCHECK_URL != '' }}
+        env:
+          HEALTHCHECK_URL: ${{ secrets.STAGING_HEALTHCHECK_URL }}
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$HEALTHCHECK_URL"; then
+              echo "Staging healthcheck passed"
+              exit 0
+            fi
+            echo "Staging healthcheck retry $i"
+            sleep 10
+          done
+          echo "Staging healthcheck failed"
+          exit 1
+
+      - name: No staging hooks configured
+        if: ${{ secrets.STAGING_RENDER_DEPLOY_HOOK_URL == '' && secrets.STAGING_RAILWAY_DEPLOY_HOOK_URL == '' }}
+        run: |
+          echo "No staging deploy hooks configured."
+          echo "Set STAGING_RENDER_DEPLOY_HOOK_URL or STAGING_RAILWAY_DEPLOY_HOOK_URL."
+
+  deploy-production:
+    name: Deploy to production
+    if: |
+      github.ref_name == 'main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production')
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger Render production deploy (optional)
+        if: ${{ secrets.PRODUCTION_RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Trigger Railway production deploy (optional)
+        if: ${{ secrets.PRODUCTION_RAILWAY_DEPLOY_HOOK_URL != '' }}
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_RAILWAY_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Verify production healthcheck (optional)
+        if: ${{ secrets.PRODUCTION_HEALTHCHECK_URL != '' }}
+        env:
+          HEALTHCHECK_URL: ${{ secrets.PRODUCTION_HEALTHCHECK_URL }}
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$HEALTHCHECK_URL"; then
+              echo "Production healthcheck passed"
+              exit 0
+            fi
+            echo "Production healthcheck retry $i"
+            sleep 10
+          done
+          echo "Production healthcheck failed"
+          exit 1
+
+      - name: No production hooks configured
+        if: ${{ secrets.PRODUCTION_RENDER_DEPLOY_HOOK_URL == '' && secrets.PRODUCTION_RAILWAY_DEPLOY_HOOK_URL == '' }}
+        run: |
+          echo "No production deploy hooks configured."
+          echo "Set PRODUCTION_RENDER_DEPLOY_HOOK_URL or PRODUCTION_RAILWAY_DEPLOY_HOOK_URL."
