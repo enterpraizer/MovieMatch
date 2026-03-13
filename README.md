@@ -136,6 +136,12 @@ uvicorn apps.orchestrator.main:app --host 0.0.0.0 --port 8001 --reload
 uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Отдельный worker локально (опционально для distributed-flow):
+
+```bash
+uvicorn apps.workers.main:app --host 0.0.0.0 --port 8002 --reload
+```
+
 ## Observability and Resilience
 
 Что добавлено:
@@ -155,6 +161,43 @@ uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
 curl http://localhost:8000/metrics | head
 curl http://localhost:8001/metrics | head
 ```
+
+## First staging deploy
+
+Состав staging стека:
+- `gateway`
+- `orchestrator`
+- `worker`
+- `postgres`
+- `redis`
+
+Файлы:
+- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/docker-compose.staging.yml`
+- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/Dockerfile`
+- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/staging_bootstrap.sh`
+- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/smoke_check_staging.py`
+
+Локальный staging bootstrap:
+
+```bash
+./scripts/staging_bootstrap.sh
+```
+
+Что делает bootstrap:
+1. Поднимает staging compose stack
+2. Применяет миграции (`alembic upgrade head`)
+3. Загружает sample data ingestion
+4. Запускает smoke-check (`login + recommendations for all 3 modes`)
+
+CI/CD gating:
+- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/.github/workflows/cd.yml`
+- В `staging` deploy: optional smoke-check через `STAGING_SMOKE_BASE_URL`
+- В `production` deploy: обязательная проверка staging smoke перед прод-деплоем
+
+Новые GitHub secrets для smoke:
+- `STAGING_SMOKE_BASE_URL` (например `https://staging.example.com`)
+- `STAGING_SMOKE_EMAIL` (optional)
+- `STAGING_SMOKE_PASSWORD` (optional)
 
 ## Tests
 
