@@ -113,7 +113,7 @@ python scripts/verify_e2e.py --gateway-url http://localhost:8000
 ## Vertical Slice (Frontend + Backend)
 
 Flow:
-- `frontend` (React) -> `gateway` -> `orchestrator` -> `worker` -> `db/cache` -> response
+- `frontend` (React) -> `gateway` -> `orchestrator` -> `cf/nlp/mood worker` -> `db/cache` -> response
 
 Frontend files:
 - `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/frontend/src/App.tsx`
@@ -136,10 +136,12 @@ uvicorn apps.orchestrator.main:app --host 0.0.0.0 --port 8001 --reload
 uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Отдельный worker локально (опционально для distributed-flow):
+Отдельные worker-сервисы локально (опционально для distributed-flow):
 
 ```bash
-uvicorn apps.workers.main:app --host 0.0.0.0 --port 8002 --reload
+uvicorn apps.workers.cf_main:app --host 0.0.0.0 --port 8002 --reload
+uvicorn apps.workers.nlp_main:app --host 0.0.0.0 --port 8003 --reload
+uvicorn apps.workers.mood_main:app --host 0.0.0.0 --port 8004 --reload
 ```
 
 ## Observability and Resilience
@@ -150,7 +152,7 @@ uvicorn apps.workers.main:app --host 0.0.0.0 --port 8002 --reload
 - Prometheus metrics endpoint: `GET /metrics` на gateway и orchestrator
 - Таймауты/ретраи:
   - gateway -> orchestrator HTTP call
-  - orchestrator -> worker execution
+  - orchestrator -> specialist worker execution (cf/nlp/mood)
 - Fallback:
   - cache fallback (in-memory if Redis недоступен)
   - recommendation fallback к collaborative mode при сбоях mode-specific обработки
@@ -167,7 +169,9 @@ curl http://localhost:8001/metrics | head
 Состав staging стека:
 - `gateway`
 - `orchestrator`
-- `worker`
+- `cf-worker`
+- `nlp-worker`
+- `mood-worker`
 - `postgres`
 - `redis`
 
