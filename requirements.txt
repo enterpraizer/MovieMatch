@@ -14,3 +14,4 @@ requests==2.32.3
 redis==5.2.1
 sentry-sdk[fastapi]==2.24.1
 prometheus-client==0.21.1
+celery==5.4.0

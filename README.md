@@ -10,7 +10,8 @@
 - `GET /health`
 - `POST /auth/login`
 - `POST /auth/refresh`
-- `POST /recommendations/{mode}` (`mode`: `collaborative`, `nlp`, `mood`)
+- `POST /recommendations/{mode}` -> submit async job (`mode`: `collaborative`, `nlp`, `mood`)
+- `GET /recommendations/jobs/{job_id}` -> poll job status/result
 
 ### Локальный запуск
 
@@ -90,6 +91,13 @@ curl -X POST http://localhost:8000/recommendations/nlp \
   -d '{"query":"space drama", "top_k": 5}'
 ```
 
+Проверка статуса задачи:
+
+```bash
+curl -X GET http://localhost:8000/recommendations/jobs/<job_id> \
+  -H "Authorization: Bearer <your_access_token>"
+```
+
 По умолчанию включен dev-режим `AUTH_AUTO_CREATE_USER=true`: если пользователя с email нет, он будет создан при первом login.
 
 ## Data ingestion и E2E проверка
@@ -113,7 +121,7 @@ python scripts/verify_e2e.py --gateway-url http://localhost:8000
 ## Vertical Slice (Frontend + Backend)
 
 Flow:
-- `frontend` (React) -> `gateway` -> `orchestrator` -> `cf/nlp/mood worker` -> `db/cache` -> response
+- `frontend` (React) -> `gateway` -> `orchestrator` -> `Celery/Redis queues (cf/nlp/mood)` -> `workers` -> `db/cache` -> response
 
 Frontend files:
 - `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/frontend/src/App.tsx`
@@ -136,12 +144,12 @@ uvicorn apps.orchestrator.main:app --host 0.0.0.0 --port 8001 --reload
 uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Отдельные worker-сервисы локально (опционально для distributed-flow):
+Отдельные Celery workers локально (опционально для distributed-flow):
 
 ```bash
-uvicorn apps.workers.cf_main:app --host 0.0.0.0 --port 8002 --reload
-uvicorn apps.workers.nlp_main:app --host 0.0.0.0 --port 8003 --reload
-uvicorn apps.workers.mood_main:app --host 0.0.0.0 --port 8004 --reload
+celery -A apps.workers.celery_tasks:celery_app worker -Q cf --loglevel=INFO -n cf@%h
+celery -A apps.workers.celery_tasks:celery_app worker -Q nlp --loglevel=INFO -n nlp@%h
+celery -A apps.workers.celery_tasks:celery_app worker -Q mood --loglevel=INFO -n mood@%h
 ```
 
 ## Observability and Resilience
@@ -152,7 +160,7 @@ uvicorn apps.workers.mood_main:app --host 0.0.0.0 --port 8004 --reload
 - Prometheus metrics endpoint: `GET /metrics` на gateway и orchestrator
 - Таймауты/ретраи:
   - gateway -> orchestrator HTTP call
-  - orchestrator -> specialist worker execution (cf/nlp/mood)
+  - retry policy на Celery tasks (queue-level)
 - Fallback:
   - cache fallback (in-memory if Redis недоступен)
   - recommendation fallback к collaborative mode при сбоях mode-specific обработки
@@ -191,7 +199,6 @@ curl http://localhost:8001/metrics | head
 
 ```env
 JWT_SECRET_KEY=<strong-random-secret>
-WORKER_INTERNAL_TOKEN=<internal-service-token>
 ```
 
 Что делает bootstrap:
