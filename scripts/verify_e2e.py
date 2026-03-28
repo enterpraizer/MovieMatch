@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 
 import requests
 
@@ -49,13 +50,30 @@ def main() -> None:
 
     for mode, body in modes:
         resp = requests.post(f"{base}/recommendations/{mode}", json=body, headers=headers, timeout=15)
-        if resp.status_code != 200:
+        if resp.status_code not in (200, 202):
             fail(f"{mode} status {resp.status_code}: {resp.text}")
-        data = resp.json()
-        recommendations = data.get("recommendations", [])
-        if not recommendations:
-            fail(f"{mode} returned empty recommendations")
-        print(f"{mode}: ok ({len(recommendations)} recommendations)")
+        submit = resp.json()
+        job_id = submit.get("job_id")
+        if not job_id:
+            fail(f"{mode} missing job_id in response")
+
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            job_resp = requests.get(f"{base}/recommendations/jobs/{job_id}", headers=headers, timeout=15)
+            if job_resp.status_code != 200:
+                fail(f"{mode} status poll {job_resp.status_code}: {job_resp.text}")
+            job = job_resp.json()
+            if job.get("status") == "completed":
+                recommendations = (job.get("result") or {}).get("recommendations", [])
+                if not recommendations:
+                    fail(f"{mode} completed without recommendations")
+                print(f"{mode}: ok ({len(recommendations)} recommendations)")
+                break
+            if job.get("status") == "failed":
+                fail(f"{mode} failed: {job.get('error')}")
+            time.sleep(1)
+        else:
+            fail(f"{mode} timed out")
 
     print("E2E passed")
 
