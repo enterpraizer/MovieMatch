@@ -20,10 +20,20 @@ def test_orchestrator_auth_and_protected_recommendations(orchestrator_client, se
         headers={"Authorization": f"Bearer {access_token}"},
         json={"top_k": 3},
     )
-    assert auth_resp.status_code == 200
+    assert auth_resp.status_code == 202
     body = auth_resp.json()
-    assert body["mode"] == "collaborative"
-    assert len(body["recommendations"]) > 0
+    assert body["status"] == "queued"
+    assert body["job_id"]
+
+    status_resp = orchestrator_client.get(
+        f"/recommendations/jobs/{body['job_id']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert status_resp.status_code == 200
+    status_body = status_resp.json()
+    assert status_body["status"] == "completed"
+    assert status_body["result"]["mode"] == "collaborative"
+    assert len(status_body["result"]["recommendations"]) > 0
 
     with session_local() as db:
         req_count = db.scalar(select(func.count(RecommendationRequestModel.id)))

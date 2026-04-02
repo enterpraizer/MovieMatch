@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import os
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
 
 from apps.common.auth import hash_password
 from apps.common.cache import _memory_cache

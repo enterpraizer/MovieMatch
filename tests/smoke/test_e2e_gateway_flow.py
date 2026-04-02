@@ -14,7 +14,19 @@ def test_gateway_to_orchestrator_e2e(gateway_client, orchestrator_client, monkey
             request=request,
         )
 
+    async def fake_get(self, url, headers=None, **kwargs):
+        endpoint = urlparse(url).path
+        upstream = orchestrator_client.get(endpoint, headers=headers or {})
+        request = httpx.Request("GET", url)
+        return httpx.Response(
+            status_code=upstream.status_code,
+            content=upstream.content,
+            headers=dict(upstream.headers),
+            request=request,
+        )
+
     monkeypatch.setattr("apps.gateway.main.httpx.AsyncClient.post", fake_post)
+    monkeypatch.setattr("apps.gateway.main.httpx.AsyncClient.get", fake_get)
 
     login_resp = gateway_client.post(
         "/auth/login",
@@ -31,6 +43,10 @@ def test_gateway_to_orchestrator_e2e(gateway_client, orchestrator_client, monkey
         ("mood", {"query": "happy", "top_k": 3}),
     ]:
         resp = gateway_client.post(f"/recommendations/{mode}", json=payload, headers=headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 202
         data = resp.json()
-        assert data["recommendations"]
+        assert data["job_id"]
+        job = gateway_client.get(f"/recommendations/jobs/{data['job_id']}", headers=headers)
+        assert job.status_code == 200
+        assert job.json()["status"] == "completed"
+        assert job.json()["result"]["recommendations"]
