@@ -67,6 +67,7 @@ class TwoTowerModel(pl.LightningModule):
         genome_dim: int = 1128,
         genome_proj_dim: int = 64,
         emb_dim: int = 256,
+        user_emb_dim: int | None = None,
         hidden_dim: int = 512,
         out_dim: int = 256,
         dropout: float = 0.2,
@@ -79,7 +80,8 @@ class TwoTowerModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.user_embedding = nn.Embedding(n_users + 1, emb_dim, padding_idx=0)
+        user_emb = user_emb_dim if user_emb_dim is not None else emb_dim
+        self.user_embedding = nn.Embedding(n_users + 1, user_emb, padding_idx=0)
         self.item_embedding = nn.Embedding(n_items + 1, emb_dim, padding_idx=0)
         nn.init.xavier_normal_(self.user_embedding.weight[1:])
         nn.init.xavier_normal_(self.item_embedding.weight[1:])
@@ -91,7 +93,7 @@ class TwoTowerModel(pl.LightningModule):
         )
         self.genome_encoder = GenomeEncoder(genome_dim, genome_proj_dim, dropout)
 
-        user_input_dim = emb_dim + user_feature_dim
+        user_input_dim = user_emb + user_feature_dim
         item_input_dim = emb_dim + item_feature_dim + nlp_proj_dim + genome_proj_dim
 
         self.user_tower = Tower(user_input_dim, hidden_dim, out_dim, dropout, n_blocks)
@@ -121,33 +123,66 @@ class TwoTowerModel(pl.LightningModule):
         return self.item_tower(torch.cat([emb, item_feats, nlp, gn], dim=-1))
 
     def _infonce_loss(
-        self, user_emb: torch.Tensor, pos_emb: torch.Tensor
+        self,
+        user_emb: torch.Tensor,
+        pos_emb: torch.Tensor,
+        neg_emb: torch.Tensor | None = None,
     ) -> torch.Tensor:
         B = user_emb.shape[0]
-        in_batch_scores = (user_emb @ pos_emb.T) / self.temperature
-        in_batch_scores = in_batch_scores.clamp(-50.0, 50.0)
-        labels = torch.arange(B, device=self.device)
-        return F.cross_entropy(in_batch_scores, labels, label_smoothing=self.label_smoothing)
+        pos_score = (user_emb * pos_emb).sum(-1, keepdim=True) / self.temperature
 
-    def _step(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+        parts = [pos_score]
+
+        if neg_emb is not None:
+            neg_scores = torch.bmm(neg_emb, user_emb.unsqueeze(-1)).squeeze(-1) / self.temperature
+            parts.append(neg_scores)
+
+        in_batch_scores = (user_emb @ pos_emb.T) / self.temperature
+        mask = torch.eye(B, device=self.device, dtype=torch.bool)
+        in_batch_scores = in_batch_scores.masked_fill(mask, float("-inf"))
+        parts.append(in_batch_scores)
+
+        logits = torch.cat(parts, dim=-1).clamp(-50.0, 50.0)
+        labels = torch.zeros(B, dtype=torch.long, device=self.device)
+        return F.cross_entropy(logits, labels, label_smoothing=self.label_smoothing)
+
+    def _step(
+        self, batch: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         u = self.encode_user(batch["user_ids"], batch["user_feats"])
         p = self.encode_item(
             batch["pos_ids"], batch["pos_feats"], batch["pos_nlp"], batch["pos_genome"]
         )
-        return u, p
+
+        n = None
+        if "neg_ids" in batch:
+            B, N = batch["neg_ids"].shape
+            n = self.encode_item(
+                batch["neg_ids"].reshape(B * N),
+                batch["neg_feats"].reshape(B * N, -1),
+                batch["neg_nlp"].reshape(B * N, -1),
+                batch["neg_genome"].reshape(B * N, -1),
+            ).reshape(B, N, -1)
+        return u, p, n
 
     def training_step(self, batch: dict[str, torch.Tensor], _: int) -> torch.Tensor:
-        u, p = self._step(batch)
-        loss = self._infonce_loss(u, p)
+        u, p, n = self._step(batch)
+        loss = self._infonce_loss(u, p, n)
         self.log("train_loss", loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch: dict[str, torch.Tensor], _: int) -> None:
-        u, p = self._step(batch)
-        loss = self._infonce_loss(u, p)
+        u, p, n = self._step(batch)
+        loss = self._infonce_loss(u, p, n)
 
-        scores = u @ p.T
-        ranks = (scores >= scores.diag().unsqueeze(-1)).sum(dim=-1).float()
+        if n is not None:
+            pos_score = (u * p).sum(-1)
+            neg_scores = torch.bmm(n, u.unsqueeze(-1)).squeeze(-1)
+            all_scores = torch.cat([pos_score.unsqueeze(-1), neg_scores], dim=-1)
+            ranks = (all_scores >= pos_score.unsqueeze(-1)).sum(dim=-1).float()
+        else:
+            scores = u @ p.T
+            ranks = (scores >= scores.diag().unsqueeze(-1)).sum(dim=-1).float()
 
         self.log("val_loss", loss, prog_bar=True, sync_dist=True)
         self.log("val_hr_at_10", (ranks <= 10).float().mean(), prog_bar=True, sync_dist=True)

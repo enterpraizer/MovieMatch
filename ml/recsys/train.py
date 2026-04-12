@@ -1,7 +1,8 @@
-"""Two-Tower v3 training: genome features, in-batch InfoNCE, τ=0.07."""
+"""Two-Tower v3 training: genome features, in-batch + explicit negatives, τ=0.07."""
 import argparse
 import asyncio
 import os
+import random
 from collections import defaultdict
 from typing import Any
 
@@ -24,6 +25,7 @@ ITEM_FEATURE_DIM = N_GENRES + 3
 USER_FEATURE_DIM = N_GENRES + 3
 NLP_DIM = 384
 GENOME_DIM = 1128
+NEG_SAMPLES = 20
 
 
 def parse_vector(raw: Any, dim: int) -> np.ndarray:
@@ -140,6 +142,8 @@ class MovieLensDataset(Dataset):
         user_features: dict[str, np.ndarray],
         user_map: dict[int, int],
         movie_map: dict[int, int],
+        user_history: dict[str, set[int]],
+        neg_samples: int = NEG_SAMPLES,
     ) -> None:
         self.ratings = ratings
         self.item_features = item_features
@@ -148,6 +152,9 @@ class MovieLensDataset(Dataset):
         self.user_features = user_features
         self.user_map = user_map
         self.movie_map = movie_map
+        self.user_history = user_history
+        self.neg_samples = neg_samples
+        self.all_movie_ids = list(movie_map.keys())
         self._zero_item = np.zeros(ITEM_FEATURE_DIM, dtype=np.float32)
         self._zero_nlp = np.zeros(NLP_DIM, dtype=np.float32)
         self._zero_genome = np.zeros(GENOME_DIM, dtype=np.float32)
@@ -162,6 +169,29 @@ class MovieLensDataset(Dataset):
         uid = self.user_map.get(r["user_id"], 0)
         mid = r["movie_id"]
         pos_idx = self.movie_map.get(mid, 0)
+
+        seen = self.user_history.get(uid_str, set())
+        neg_ids: list[int] = []
+        neg_feats: list[np.ndarray] = []
+        neg_nlps: list[np.ndarray] = []
+        neg_genomes: list[np.ndarray] = []
+
+        attempts = 0
+        while len(neg_ids) < self.neg_samples and attempts < self.neg_samples * 4:
+            neg_mid = random.choice(self.all_movie_ids)
+            attempts += 1
+            if neg_mid in seen:
+                continue
+            neg_ids.append(self.movie_map.get(neg_mid, 0))
+            neg_feats.append(self.item_features.get(neg_mid, self._zero_item))
+            neg_nlps.append(self.nlp_embeddings.get(neg_mid, self._zero_nlp))
+            neg_genomes.append(self.genomes.get(neg_mid, self._zero_genome))
+        while len(neg_ids) < self.neg_samples:
+            neg_mid = random.choice(self.all_movie_ids)
+            neg_ids.append(self.movie_map.get(neg_mid, 0))
+            neg_feats.append(self.item_features.get(neg_mid, self._zero_item))
+            neg_nlps.append(self.nlp_embeddings.get(neg_mid, self._zero_nlp))
+            neg_genomes.append(self.genomes.get(neg_mid, self._zero_genome))
 
         return {
             "user_ids": torch.tensor(uid, dtype=torch.long),
@@ -178,6 +208,10 @@ class MovieLensDataset(Dataset):
             "pos_genome": torch.tensor(
                 self.genomes.get(mid, self._zero_genome), dtype=torch.float32
             ),
+            "neg_ids": torch.tensor(neg_ids, dtype=torch.long),
+            "neg_feats": torch.tensor(np.array(neg_feats), dtype=torch.float32),
+            "neg_nlp": torch.tensor(np.array(neg_nlps), dtype=torch.float32),
+            "neg_genome": torch.tensor(np.array(neg_genomes), dtype=torch.float32),
         }
 
 
@@ -224,13 +258,17 @@ def train(
     train_user_features = build_user_features(train_ratings, movie_genres, genre_to_idx)
     all_user_features = build_user_features(ratings, movie_genres, genre_to_idx)
 
+    user_history: dict[str, set[int]] = defaultdict(set)
+    for r in train_ratings:
+        user_history[str(r["user_id"])].add(r["movie_id"])
+
     train_ds = MovieLensDataset(
         train_ratings, item_features, nlp_embeddings, genomes, train_user_features,
-        user_map, movie_map,
+        user_map, movie_map, user_history,
     )
     val_ds = MovieLensDataset(
         val_ratings, item_features, nlp_embeddings, genomes, all_user_features,
-        user_map, movie_map,
+        user_map, movie_map, user_history,
     )
 
     train_loader = DataLoader(
@@ -250,6 +288,7 @@ def train(
         genome_dim=GENOME_DIM,
         genome_proj_dim=64,
         emb_dim=256,
+        user_emb_dim=64,
         hidden_dim=512,
         out_dim=256,
         dropout=dropout,
