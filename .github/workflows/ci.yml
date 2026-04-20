@@ -1,95 +1,218 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches:
-      - develop
-      - main
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  python-checks:
-    name: Python checks
+  backend-lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.11'
+          version: latest
+          enable-cache: true
+      - run: uv sync --extra dev
+      - run: uv run ruff check . --output-format=github
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - run: uv run bandit -r . -x tests -ll
 
-      - name: Install Python deps (if present)
-        run: |
-          if [ -f requirements.txt ]; then
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-          elif [ -f pyproject.toml ]; then
-            python -m pip install --upgrade pip
-            pip install .
-          else
-            echo "No Python dependency file found, skipping install"
-          fi
-
-      - name: Lint (if configured)
-        run: |
-          if [ -f pyproject.toml ] && grep -q "\[tool.ruff\]" pyproject.toml; then
-            pip install ruff
-            ruff check .
-          else
-            echo "Ruff not configured, skipping"
-          fi
-
-      - name: Run tests (if tests exist)
-        run: |
-          if [ -d tests ]; then
-            pip install pytest
-            pytest -q
-          else
-            echo "No tests directory, skipping"
-          fi
-
-  frontend-checks:
-    name: Frontend checks
+  backend-test:
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('frontend/package.json') != '' }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: moviematch
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: moviematch
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U moviematch -d moviematch"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_URL: postgresql+asyncpg://moviematch:changeme@localhost:5432/moviematch
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-secret-minimum-32-characters-long-padding
+      TMDB_API_KEY: ci_dummy
+      ML_RECSYS_URL: http://localhost:9991
+      ML_NLP_URL: http://localhost:9992
+      ML_CV_URL: http://localhost:9993
+      LOG_LEVEL: WARNING
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+      - run: uv sync --extra dev
+      - name: Install pgvector + extensions
+        run: |
+          PGPASSWORD=changeme psql -h localhost -U moviematch -d moviematch -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          PGPASSWORD=changeme psql -h localhost -U moviematch -d moviematch -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+          PGPASSWORD=changeme psql -h localhost -U moviematch -d moviematch -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+      - run: uv run alembic upgrade head
+      - run: uv run pytest tests/ -v --cov=. --cov-report=xml --cov-fail-under=80
+      - uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage.xml
+          flags: backend
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend-lint:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+      - run: pnpm lint
+      - run: pnpm prettier --check "src/**/*.{ts,tsx,css}"
 
-      - name: Install deps
-        run: npm ci
-
-      - name: Lint (if script exists)
-        run: npm run lint --if-present
-
-      - name: Typecheck (if script exists)
-        run: npm run typecheck --if-present
-
-      - name: Test (if script exists)
-        run: npm test --if-present
-
-  docker-smoke:
-    name: Docker smoke build
+  frontend-test:
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('docker-compose.yml') != '' }}
+    defaults:
+      run:
+        working-directory: frontend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run --coverage
+      - uses: codecov/codecov-action@v4
+        with:
+          files: frontend/coverage/coverage-final.json
+          flags: frontend
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Backend pip-audit
+        working-directory: backend
+        run: |
+          uv sync --extra dev
+          uv run pip-audit --strict
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Frontend pnpm audit
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
 
-      - name: Validate docker compose config
-        run: docker compose config
+  docker-build:
+    needs: [backend-lint, backend-test, frontend-lint, frontend-test, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    strategy:
+      matrix:
+        image:
+          - name: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+          - name: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+          - name: ml-nlp
+            context: ./ml/nlp
+            dockerfile: ./ml/nlp/Dockerfile
+          - name: ml-cv
+            context: ./ml/cv
+            dockerfile: ./ml/cv/Dockerfile
+          - name: ml-recsys
+            context: ./ml/recsys
+            dockerfile: ./ml/recsys/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image.name }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+          target: ${{ matrix.image.name == 'backend' || matrix.image.name == 'frontend' && 'production' || '' }}
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image.name }}:sha-${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.image.name }}.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.image.name }}.sarif
+          category: trivy-${{ matrix.image.name }}
