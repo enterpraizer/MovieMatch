@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: moviematch-backend
+  namespace: moviematch
+  labels:
+    app: moviematch-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: moviematch-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP

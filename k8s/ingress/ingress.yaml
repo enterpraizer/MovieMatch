@@ -1,0 +1,59 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+  namespace: moviematch
+spec:
+  rateLimit:
+    average: 100
+    period: 1m
+    burst: 50
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: moviematch
+spec:
+  headers:
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    stsPreload: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: strict-origin-when-cross-origin
+    customResponseHeaders:
+      X-Frame-Options: DENY
+      Permissions-Policy: "geolocation=(), microphone=(), camera=(self)"
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: moviematch
+  namespace: moviematch
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`moviematch.example.com`) && PathPrefix(`/v1`)
+      kind: Rule
+      services:
+        - name: moviematch-backend
+          port: 8000
+      middlewares:
+        - name: rate-limit
+        - name: security-headers
+    - match: Host(`moviematch.example.com`) && (PathPrefix(`/health`) || PathPrefix(`/ready`) || PathPrefix(`/metrics`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))
+      kind: Rule
+      services:
+        - name: moviematch-backend
+          port: 8000
+    - match: Host(`moviematch.example.com`)
+      kind: Rule
+      services:
+        - name: moviematch-frontend
+          port: 3000
+      middlewares:
+        - name: security-headers
+  tls:
+    certResolver: letsencrypt
