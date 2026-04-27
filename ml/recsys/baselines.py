@@ -15,23 +15,57 @@ import asyncpg
 import numpy as np
 
 
+POSITIVE_THRESHOLD = 4.0
+MIN_USER_POSITIVES = 10
+MAX_USER_POSITIVES = 500
+
+
 async def load_split() -> tuple[
     list[tuple[str, int]], list[tuple[str, int]], dict[int, int]
 ]:
+    """Same filter+split as evaluate.py: core-pruning + per-user leave-last-10%.
+
+    Returns train/val as (user_id_str, movie_id) pairs of POSITIVES only
+    (score ≥ 4.0). Users with <10 or >500 positives are dropped.
+    """
     dsn = os.environ["POSTGRES_URL"].replace("postgresql+asyncpg://", "postgresql://")
     conn = await asyncpg.connect(dsn)
     try:
         rows = await conn.fetch(
-            "SELECT user_id::text, movie_id FROM ratings ORDER BY created_at"
+            "SELECT user_id::text AS user_id, movie_id, score "
+            "FROM ratings ORDER BY created_at"
         )
         movies = await conn.fetch("SELECT id FROM movies ORDER BY id")
     finally:
         await conn.close()
 
-    split = int(len(rows) * 0.9)
-    train = [(r["user_id"], r["movie_id"]) for r in rows[:split]]
-    val = [(r["user_id"], r["movie_id"]) for r in rows[split:]]
     mid_to_idx = {r["id"]: i for i, r in enumerate(movies)}
+
+    pos_count: dict[str, int] = defaultdict(int)
+    for r in rows:
+        if float(r["score"]) >= POSITIVE_THRESHOLD:
+            pos_count[r["user_id"]] += 1
+    eligible = {
+        u for u, c in pos_count.items()
+        if MIN_USER_POSITIVES <= c <= MAX_USER_POSITIVES
+    }
+    print(f"Eligible users: {len(eligible)} / {len(pos_count)}")
+
+    user_positives: dict[str, list[int]] = defaultdict(list)
+    for r in rows:
+        if r["user_id"] not in eligible:
+            continue
+        if float(r["score"]) >= POSITIVE_THRESHOLD:
+            user_positives[r["user_id"]].append(r["movie_id"])
+
+    train: list[tuple[str, int]] = []
+    val: list[tuple[str, int]] = []
+    for uid, mids in user_positives.items():
+        n_val = max(1, int(len(mids) * 0.1))
+        for m in mids[:-n_val]:
+            train.append((uid, m))
+        for m in mids[-n_val:]:
+            val.append((uid, m))
     return train, val, mid_to_idx
 
 
