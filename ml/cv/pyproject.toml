@@ -1,0 +1,21 @@
+[project]
+name = "moviematch-ml-cv"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "python-multipart>=0.0.17",
+  "pydantic>=2.9.0",
+  "onnxruntime>=1.20.0",
+  "opencv-python-headless>=4.10.0",
+  "mediapipe>=0.10.18",
+  "numpy>=1.26,<2.0",
+  "structlog>=24.4.0",
+  "python-dotenv>=1.0.1",
+  "huggingface-hub>=0.26.0",
+  "torch>=2.5.0",
+  "torchvision>=0.20.0",
+  "onnx>=1.16.0,<1.18",
+  "ml-dtypes<0.5",
+]
