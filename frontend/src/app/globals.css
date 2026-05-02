@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* ─── Dark Cinematic Theme ──────────────────────────────────────── */
+
+:root {
+  /* Backgrounds */
+  --background: oklch(0.13 0.005 260);
+  --background-elevated: oklch(0.16 0.006 260);
+  --card: oklch(0.18 0.008 260);
+  --card-hover: oklch(0.21 0.01 260);
+
+  /* Foreground / text */
+  --foreground: oklch(0.95 0.005 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --subtle-foreground: oklch(0.45 0.01 260);
+
+  /* Borders */
+  --border: oklch(0.25 0.01 260);
+  --border-hover: oklch(0.35 0.015 260);
+
+  /* Accent: golden for star ratings */
+  --accent: oklch(0.82 0.16 85);
+  --accent-foreground: oklch(0.15 0.02 85);
+
+  /* Tab accent colors */
+  --tab-collaborative: oklch(0.62 0.2 290);
+  --tab-search: oklch(0.72 0.14 210);
+  --tab-emotion: oklch(0.68 0.18 350);
+
+  /* Semantic */
+  --primary: oklch(0.62 0.2 290);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.22 0.01 260);
+  --secondary-foreground: oklch(0.9 0.005 260);
+  --muted: oklch(0.22 0.01 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  /* Popover / dialog */
+  --popover: oklch(0.16 0.006 260);
+  --popover-foreground: oklch(0.95 0.005 260);
+
+  /* Input / ring */
+  --input: oklch(0.25 0.01 260);
+  --ring: oklch(0.62 0.2 290);
+
+  /* Shadows */
+  --shadow-card: 0 2px 8px oklch(0 0 0 / 0.4);
+  --shadow-card-hover: 0 8px 24px oklch(0 0 0 / 0.6);
+  --shadow-glow-purple: 0 0 20px oklch(0.62 0.2 290 / 0.3);
+  --shadow-glow-cyan: 0 0 20px oklch(0.72 0.14 210 / 0.3);
+  --shadow-glow-pink: 0 0 20px oklch(0.68 0.18 350 / 0.3);
+
+  /* Radius */
+  --radius: 0.625rem;
+  --radius-sm: 0.375rem;
+  --radius-lg: 0.875rem;
+
+  /* Chart colors (for potential charts) */
+  --chart-1: oklch(0.62 0.2 290);
+  --chart-2: oklch(0.72 0.14 210);
+  --chart-3: oklch(0.68 0.18 350);
+  --chart-4: oklch(0.82 0.16 85);
+  --chart-5: oklch(0.55 0.22 25);
+}
+
+/* ─── Base ────────────────────────────────────────────────────── */
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family:
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Custom scrollbar ────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* ─── Keyframe animations ─────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes score-badge-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ─── Utility classes ─────────────────────────────────────────── */
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--card) 25%,
+    var(--card-hover) 50%,
+    var(--card) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.gradient-overlay-bottom {
+  background: linear-gradient(
+    to top,
+    oklch(0.13 0.005 260) 0%,
+    oklch(0.13 0.005 260 / 0.8) 30%,
+    transparent 100%
+  );
+}
+
+.tab-content-enter {
+  animation: tab-enter 0.3s ease-out;
+}
+
+.glass-card {
+  background: oklch(0.18 0.008 260 / 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid oklch(0.3 0.01 260 / 0.5);
+}
+
+/* ===== Mobile polish ================================================
+   Prevent horizontal scroll caused by stray fixed widths, iOS tap
+   highlight flash, and make buttons/links feel native on touch. */
+html,
+body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Inputs stay at 16px+ font-size on iOS so Safari doesn't auto-zoom */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch targets ≥ 44px following Apple HIG */
+button,
+[role="button"],
+a.btn {
+  touch-action: manipulation;
+}
+
+/* Notched devices (iPhone with home indicator) — respect safe area */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
