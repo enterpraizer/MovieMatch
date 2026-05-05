@@ -22,8 +22,10 @@ from dotenv import load_dotenv
 
 from model import TwoTowerModel
 from train import (
-    ITEM_FEATURE_DIM, NLP_DIM, USER_FEATURE_DIM,
-    build_user_features, load_training_data,
+    ITEM_FEATURE_DIM, NLP_DIM, USER_FEATURE_DIM, HISTORY_TOP_N,
+    POSITIVE_THRESHOLD, MIN_USER_POSITIVES, MAX_USER_POSITIVES,
+    build_user_features, build_user_history_nlp, build_user_sequence_ids,
+    load_training_data,
 )
 
 load_dotenv()
@@ -55,7 +57,7 @@ async def _load_data(url: str) -> dict[str, Any]:
         await pool.close()
 
 
-def evaluate(checkpoint_path: str) -> dict[str, float]:
+def evaluate(checkpoint_path: str, cross_encoder_path: str | None = None, retrieval_k: int = 200) -> dict[str, float]:
     url = os.environ["POSTGRES_URL"].replace("postgresql+asyncpg://", "postgresql://")
     data = asyncio.run(_load_data(url))
 
@@ -70,15 +72,64 @@ def evaluate(checkpoint_path: str) -> dict[str, float]:
 
     print(f"Loaded {len(ratings)} ratings, {len(movie_map)} movies, {len(user_map)} users")
 
-    split_idx = int(len(ratings) * 0.9)
-    train_ratings = ratings[:split_idx]
-    val_ratings = ratings[split_idx:]
-    print(f"Split: {len(train_ratings)} train, {len(val_ratings)} val")
+    # Replicate train.py filtering EXACTLY: core-prune users to those with
+    # 10..500 positives (score ≥ 4.0), split the POSITIVES 90/10 temporally,
+    # and build user features from the "train context" — all ratings (including
+    # <4) of eligible users up to the train cutoff time.
+    from collections import Counter
+    user_pos_count: Counter = Counter()
+    for r in ratings:
+        if float(r["score"]) >= POSITIVE_THRESHOLD:
+            user_pos_count[r["user_id"]] += 1
+    eligible_users = {
+        uid for uid, cnt in user_pos_count.items()
+        if MIN_USER_POSITIVES <= cnt <= MAX_USER_POSITIVES
+    }
+    print(
+        f"Core-pruning: {len(eligible_users)}/{len(user_pos_count)} users "
+        f"have {MIN_USER_POSITIVES}-{MAX_USER_POSITIVES} positives (score ≥ {POSITIVE_THRESHOLD})"
+    )
 
-    all_user_features = build_user_features(ratings, movie_genres, genre_to_idx)
+    context_ratings = [r for r in ratings if r["user_id"] in eligible_users]
+    print(f"After user-filter: {len(context_ratings):,} ratings of eligible users")
+
+    # Per-user leave-last-10%-of-positives split. The DB `created_at` ordering
+    # groups ratings by import batch (user-by-user), so a global slice would
+    # partition users rather than time. Holding out each user's latest positives
+    # is the standard MovieLens eval protocol (LOO / leave-last-N).
+    user_positives: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    user_context: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in context_ratings:
+        uid_str = str(r["user_id"])
+        user_context[uid_str].append(r)
+        if float(r["score"]) >= POSITIVE_THRESHOLD:
+            user_positives[uid_str].append(r)
+
+    train_ratings: list[dict[str, Any]] = []
+    val_ratings: list[dict[str, Any]] = []
+    train_context: list[dict[str, Any]] = []
+    for uid_str, urs in user_positives.items():
+        n_val = max(1, int(len(urs) * 0.1))
+        held_out = urs[-n_val:]
+        kept = urs[:-n_val]
+        train_ratings.extend(kept)
+        val_ratings.extend(held_out)
+        # Train context: all low/high ratings up to the last kept positive's position.
+        held_out_ids = {id(r) for r in held_out}
+        for r in user_context[uid_str]:
+            if id(r) not in held_out_ids:
+                train_context.append(r)
+    print(
+        f"Per-user split: {len(train_ratings):,} train-positives, "
+        f"{len(val_ratings):,} val-positives across {len(user_positives):,} users"
+    )
+
+    all_user_features = build_user_features(train_context, movie_genres, genre_to_idx)
+    all_history_nlp = build_user_history_nlp(train_ratings, nlp_embeddings)
+    all_sequence_ids = build_user_sequence_ids(train_ratings, movie_map)
 
     user_train_history: dict[str, set[int]] = defaultdict(set)
-    for r in train_ratings:
+    for r in train_context:
         user_train_history[str(r["user_id"])].add(r["movie_id"])
 
     print(f"\nLoading checkpoint: {checkpoint_path}")
@@ -87,6 +138,15 @@ def evaluate(checkpoint_path: str) -> dict[str, float]:
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model = model.to(device)
     print(f"Model on device: {device}")
+
+    cross_encoder = None
+    if cross_encoder_path:
+        from cross_encoder import CrossEncoderModel
+        print(f"Loading cross-encoder: {cross_encoder_path}")
+        cross_encoder = CrossEncoderModel.load_from_checkpoint(cross_encoder_path, map_location="cpu")
+        cross_encoder.eval()
+        cross_encoder = cross_encoder.to(device)
+        print(f"Cross-encoder loaded; retrieval_k={retrieval_k}")
 
     all_mids = sorted(movie_map.keys())
     mid_to_idx = {m: i for i, m in enumerate(all_mids)}
@@ -134,7 +194,21 @@ def evaluate(checkpoint_path: str) -> dict[str, float]:
         with torch.no_grad():
             u_ids = torch.tensor(uid_indices, device=device)
             u_feats = torch.tensor(np.array(uf_list), dtype=torch.float32, device=device)
-            u_emb = model.encode_user(u_ids, u_feats)
+            history_arg = None
+            if getattr(model, "use_history", False):
+                hist_list = [all_history_nlp.get(u, np.zeros(NLP_DIM, dtype=np.float32)) for u in batch_users]
+                history_arg = torch.tensor(np.array(hist_list), dtype=torch.float32, device=device)
+            sequence_arg = None
+            if getattr(model, "use_sequence", False):
+                seq_list = [all_sequence_ids.get(u, np.zeros(HISTORY_TOP_N, dtype=np.int64)) for u in batch_users]
+                sequence_arg = torch.tensor(np.array(seq_list), dtype=torch.long, device=device)
+            try:
+                u_emb = model.encode_user(u_ids, u_feats, history_arg, sequence_arg)
+            except TypeError:
+                try:
+                    u_emb = model.encode_user(u_ids, u_feats, history_arg)
+                except TypeError:
+                    u_emb = model.encode_user(u_ids, u_feats)
             scores = u_emb @ all_item_emb.T
 
         for bi, uid_str in enumerate(batch_users):
@@ -144,6 +218,20 @@ def evaluate(checkpoint_path: str) -> dict[str, float]:
                     user_scores[mid_to_idx[seen_mid]] = float("-inf")
 
             sorted_indices = torch.argsort(user_scores, descending=True).cpu().numpy()
+
+            if cross_encoder is not None:
+                # Re-rank the top-K by Two-Tower using cross-encoder; items outside
+                # top-K keep their Two-Tower rank.
+                top_idx = sorted_indices[:retrieval_k]
+                with torch.no_grad():
+                    u_rep = u_emb[bi].unsqueeze(0).expand(len(top_idx), -1)
+                    i_rep = all_item_emb[top_idx]
+                    ce_scores = cross_encoder(u_rep, i_rep).cpu().numpy()
+                ce_order = np.argsort(-ce_scores)
+                sorted_indices = np.concatenate(
+                    [top_idx[ce_order], sorted_indices[retrieval_k:]]
+                )
+
             rank_of_item = np.empty(len(sorted_indices), dtype=np.int64)
             rank_of_item[sorted_indices] = np.arange(len(sorted_indices))
 
@@ -197,6 +285,10 @@ def print_metrics(metrics: dict[str, float]) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=str, default=None)
+    parser.add_argument("--cross-encoder", type=str, default=None,
+                        help="Cross-encoder checkpoint path; enables multi-stage re-ranking.")
+    parser.add_argument("--retrieval-k", type=int, default=200,
+                        help="Number of Two-Tower candidates to re-rank.")
     args = parser.parse_args()
 
     ckpt = args.checkpoint or find_best_checkpoint()
@@ -204,5 +296,5 @@ if __name__ == "__main__":
         print("No checkpoint found. Train first.")
         raise SystemExit(1)
 
-    metrics = evaluate(ckpt)
+    metrics = evaluate(ckpt, args.cross_encoder, args.retrieval_k)
     print_metrics(metrics)

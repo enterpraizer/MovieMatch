@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moviematch-ml-recsys
+  namespace: moviematch
+  labels:
+    app: moviematch-ml-recsys
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moviematch-ml-recsys
+  template:
+    metadata:
+      labels:
+        app: moviematch-ml-recsys
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: recsys
+          image: ghcr.io/OWNER/moviematch/ml-recsys:latest
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - secretRef:
+                name: moviematch-secrets
+            - configMapRef:
+                name: moviematch-config
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 120
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moviematch-ml-recsys
+  namespace: moviematch
+spec:
+  selector:
+    app: moviematch-ml-recsys
+  ports:
+    - port: 8001
+      targetPort: 8001

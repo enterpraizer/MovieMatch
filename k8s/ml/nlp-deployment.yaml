@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nlp-model-cache
+  namespace: moviematch
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moviematch-ml-nlp
+  namespace: moviematch
+  labels:
+    app: moviematch-ml-nlp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moviematch-ml-nlp
+  template:
+    metadata:
+      labels:
+        app: moviematch-ml-nlp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: nlp
+          image: ghcr.io/OWNER/moviematch/ml-nlp:latest
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - secretRef:
+                name: moviematch-secrets
+            - configMapRef:
+                name: moviematch-config
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 120
+            periodSeconds: 15
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: nlp-model-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moviematch-ml-nlp
+  namespace: moviematch
+spec:
+  selector:
+    app: moviematch-ml-nlp
+  ports:
+    - port: 8002
+      targetPort: 8002

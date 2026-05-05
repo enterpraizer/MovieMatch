@@ -1,291 +1,186 @@
 # MovieMatch
 
-## Backend skeleton
+AI-powered movie recommendation system combining three independent ML approaches in a single web application.
 
-Добавлены два сервиса FastAPI:
-- `apps/orchestrator/main.py`
-- `apps/gateway/main.py`
+![CI](https://img.shields.io/badge/CI-passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)
 
-Базовые endpoint'ы:
-- `GET /health`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `POST /recommendations/{mode}` -> submit async job (`mode`: `collaborative`, `nlp`, `mood`)
-- `GET /recommendations/jobs/{job_id}` -> poll job status/result
+## Features
 
-### Локальный запуск
+Three ways to get personalized recommendations:
+
+- **By Ratings** — Collaborative filtering via a Two-Tower Neural Network trained on MovieLens. User rates movies, the model matches them against an item embedding catalog using cosine similarity.
+- **By Description** — Semantic search over movie plots using `sentence-transformers/all-MiniLM-L6-v2` (384-dim) + pgvector HNSW index, combined with PostgreSQL full-text search via Reciprocal Rank Fusion.
+- **By Mood** — Emotion detection from a selfie via a ViT ONNX model. Detected emotion maps to genre preferences (e.g., "happy" → Comedy/Adventure).
+
+## Tech Stack
+
+| Layer       | Technology                                                   |
+|-------------|--------------------------------------------------------------|
+| Frontend    | Next.js 14, TypeScript 5, Tailwind CSS v4, Zustand, TanStack Query, Framer Motion, Playwright |
+| Backend     | FastAPI, Pydantic v2, asyncpg, Alembic, Redis, Celery, python-jose, bcrypt |
+| Database    | PostgreSQL 16 + pgvector (HNSW) + pg_trgm                    |
+| ML — RecSys | PyTorch Lightning (Two-Tower), MLflow for model registry     |
+| ML — NLP    | sentence-transformers, pgvector similarity, RRF hybrid search |
+| ML — CV     | ONNX Runtime (ViT emotion model), OpenCV Haar face detection  |
+| Infra       | Docker Compose (dev), Kubernetes + Traefik (prod), ArgoCD CD  |
+| Observability | Prometheus metrics, structured JSON logs (structlog)       |
+
+## Quick Start (5 minutes)
+
+**Prerequisites:** Docker Desktop, Python 3.12, Node.js 20, `uv`, `pnpm`.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Скопируй конфиг окружения:
-
-```bash
+# 1. Clone + env
+git clone <repo-url> moviematch && cd moviematch
 cp .env.example .env
-```
+# Edit .env: generate SECRET_KEY with `openssl rand -hex 32`, get TMDB_API_KEY from themoviedb.org/settings/api
 
-Подними локальную инфру:
-
-```bash
+# 2. Infrastructure
 docker compose up -d postgres redis
+
+# 3. Backend setup
+cd backend
+uv sync --extra dev
+POSTGRES_URL="postgresql+asyncpg://moviematch:changeme@localhost:5432/moviematch" \
+  uv run alembic upgrade head
+
+# 4. Import test dataset (MovieLens files expected at data/raw/ml-25m/)
+POSTGRES_URL="postgresql+asyncpg://moviematch:changeme@localhost:5432/moviematch" \
+  uv run python scripts/data/import_movielens.py --limit 1000 --ratings-limit 50000
+
+# 5. Index NLP embeddings
+cd ../ml/nlp
+POSTGRES_URL="postgresql://moviematch:changeme@localhost:5432/moviematch" \
+  uv run python indexer.py
+
+# 6. Download CV emotion model
+cd ../cv
+uv run python download_model.py
+
+# 7. Start services (each in a separate terminal)
+cd ../nlp    && POSTGRES_URL="postgresql://moviematch:changeme@localhost:5432/moviematch" uv run uvicorn service:app --port 8002
+cd ../cv     && uv run uvicorn service:app --port 8003
+cd ../recsys && POSTGRES_URL="postgresql://moviematch:changeme@localhost:5432/moviematch" MLFLOW_TRACKING_URI=./mlruns uv run uvicorn service:app --port 8001
+cd ../../backend && POSTGRES_URL="postgresql+asyncpg://..." REDIS_URL=... SECRET_KEY=... TMDB_API_KEY=... uv run uvicorn main:app --port 8000
+
+# 8. Frontend
+cd ../frontend
+pnpm install
+pnpm generate-types   # run while backend is up
+NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm dev
+
+# 9. Open http://localhost:3000
 ```
 
-Применение миграций БД:
+## Project Structure
+
+```
+moviematch/
+├── backend/                   # FastAPI app (port 8000)
+│   ├── routers/               # auth, movies, ratings, recommendations, health
+│   ├── services/              # ML service clients + recommendation logic
+│   ├── workers/               # Celery tasks (embedding refresh, analytics)
+│   ├── db/                    # asyncpg pool + Alembic migrations
+│   ├── middleware/            # rate limit + request logging
+│   └── tests/                 # pytest suite, testcontainers integration
+├── frontend/                  # Next.js 14 (port 3000)
+│   ├── src/app/               # App Router pages (auth, movies, main tabs)
+│   ├── src/components/        # UI primitives + feature components
+│   ├── src/store/             # Zustand stores (ratings, UI)
+│   └── tests/e2e/             # Playwright specs
+├── ml/
+│   ├── recsys/                # Two-Tower RecSys (port 8001) + training
+│   ├── nlp/                   # sentence-transformers search (port 8002)
+│   └── cv/                    # Emotion ONNX inference (port 8003)
+├── k8s/                       # Deployments, HPA, IngressRoute, secrets template
+├── .github/workflows/         # ci.yml (lint/test/docker), deploy.yml (ArgoCD)
+├── scripts/
+│   ├── data/                  # MovieLens import
+│   ├── sql/                   # Postgres init (extensions)
+│   └── monitoring/            # Service health CLI
+├── data/raw/ml-25m/           # MovieLens 25M dataset (not committed)
+└── docker-compose.yml
+```
+
+## Development
+
+**Testing**
 
 ```bash
-alembic upgrade head
+# Backend unit + integration (real postgres+redis required)
+cd backend && uv run pytest tests/ -v --cov=.
+
+# Frontend component tests
+cd frontend && pnpm test
+
+# Frontend E2E (requires all services running)
+cd frontend && pnpm playwright test
 ```
 
-Импорт сэмпла данных (MovieLens + IMDb):
+**Linting & type-checking**
 
 ```bash
-python scripts/ingest_sample_data.py --ratings-limit 50000 --imdb-limit 20000
+cd backend && uv run ruff check . && uv run mypy .
+cd frontend && pnpm type-check && pnpm lint
 ```
 
-Запуск orchestrator:
+**Training the RecSys model**
 
 ```bash
-uvicorn apps.orchestrator.main:app --host 0.0.0.0 --port 8001 --reload
+cd ml/recsys
+POSTGRES_URL=... MLFLOW_TRACKING_URI=./mlruns \
+  uv run python train.py --epochs 20 --batch-size 1024 --temperature 0.15
+
+# Full-catalog evaluation
+uv run python evaluate.py
+
+# Baselines for comparison
+uv run python baselines.py popularity
+uv run python baselines.py als
 ```
 
-Запуск gateway (в другом терминале):
+## Architecture Overview
 
-```bash
-uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
+Microservices design with three independent ML workloads, all orchestrated via the FastAPI backend:
+
+```
+┌──────────┐       ┌─────────────┐
+│ Frontend │ ─────▶│  Backend    │
+│ Next.js  │       │  FastAPI    │
+│  :3000   │       │   :8000     │──┬──▶ PostgreSQL (pgvector)
+└──────────┘       └─────────────┘  │    Redis (cache + Celery broker)
+                          │         │
+                          ├────────▶│  NLP service :8002  (semantic + hybrid RRF)
+                          ├────────▶│  CV service  :8003  (emotion ONNX)
+                          └────────▶│  RecSys     :8001  (Two-Tower + MLflow)
+                                    │
+                                    └── Celery worker + beat
+                                        (embedding refresh, analytics)
 ```
 
-Проверка health:
+Each ML service has its own Dockerfile, Python environment, and scaling profile:
+- **NLP** — CPU, loads a 90 MB sentence-transformer on startup (~30 s warmup)
+- **CV** — CPU, stateless, ViT emotion model (~330 MB)
+- **RecSys** — CPU/GPU, loads trained Two-Tower from MLflow, precomputes item catalog
 
-```bash
-curl http://localhost:8001/health
-curl http://localhost:8000/health
-```
+Observability: Prometheus metrics on backend at `/metrics` (request counts, latency histograms, ML service availability gauges, auth events). Structured JSON logs via structlog with `X-Request-ID` propagation.
 
-Пример запроса:
+## Security and Privacy
 
-```bash
-curl -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@moviematch.dev","password":"demo123"}'
-```
+- **Photos** sent to `/v1/recommendations/emotion` are read into RAM only, never written to disk, never logged (no filename, no size, no content). They are deleted from memory immediately after ONNX inference completes. Only the emotion label and confidence are retained transiently. Complies with GDPR Art. 9 (biometric data).
+- **Passwords** hashed with bcrypt (12 rounds). Login endpoint calls bcrypt on every request — including for non-existent users — to prevent timing-attack user enumeration.
+- **JWT** with `access` / `refresh` tokens, `jti` claim. Refresh tokens rotated on use; old refresh token added to Redis blacklist. Logout blacklists the provided refresh token.
+- **Rate limiting** via Redis sliding-window — per-IP for unauthenticated, per-user for authenticated. Fail-open if Redis is down.
+- **Secrets** never committed. `k8s/secrets/secrets.yaml.example` is a template; real secrets created via `kubectl create secret`.
+- **Images** run as non-root UID 1001, `readOnlyRootFilesystem: true`, capabilities dropped.
 
-Ответ содержит `access_token` и `refresh_token`.
+## Full Documentation
 
-Обновление токена:
+See [`docs/superpowers/plans/2026-04-17-recsys-v3-plan.md`](docs/superpowers/plans/2026-04-17-recsys-v3-plan.md) for the RecSys improvement plan and [`docs/superpowers/plans/2026-04-17-results.md`](docs/superpowers/plans/2026-04-17-results.md) for model evaluation results (baselines vs. Two-Tower).
 
-```bash
-curl -X POST http://localhost:8000/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token":"<your_refresh_token>"}'
-```
+## License
 
-Запрос рекомендаций (требуется access token):
-
-```bash
-curl -X POST http://localhost:8000/recommendations/nlp \
-  -H "Authorization: Bearer <your_access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"space drama", "top_k": 5}'
-```
-
-Проверка статуса задачи:
-
-```bash
-curl -X GET http://localhost:8000/recommendations/jobs/<job_id> \
-  -H "Authorization: Bearer <your_access_token>"
-```
-
-По умолчанию включен dev-режим `AUTH_AUTO_CREATE_USER=true`: если пользователя с email нет, он будет создан при первом login.
-
-## Data ingestion и E2E проверка
-
-Скрипты:
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/ingest_sample_data.py`
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/verify_e2e.py`
-
-Команда e2e-проверки:
-
-```bash
-python scripts/verify_e2e.py --gateway-url http://localhost:8000
-```
-
-Ожидаемо:
-- `collaborative: ok (...)`
-- `nlp: ok (...)`
-- `mood: ok (...)`
-- `E2E passed`
-
-## Vertical Slice (Frontend + Backend)
-
-Flow:
-- `frontend` (React) -> `gateway` -> `orchestrator` -> `Celery/Redis queues (cf/nlp/mood)` -> `workers` -> `db/cache` -> response
-
-Frontend files:
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/frontend/src/App.tsx`
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/frontend/src/main.tsx`
-
-Запуск frontend:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Открой: `http://localhost:5173`
-
-Перед запуском фронта backend должен быть поднят:
-
-```bash
-uvicorn apps.orchestrator.main:app --host 0.0.0.0 --port 8001 --reload
-uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Отдельные Celery workers локально (опционально для distributed-flow):
-
-```bash
-celery -A apps.workers.celery_tasks:celery_app worker -Q cf --loglevel=INFO -n cf@%h
-celery -A apps.workers.celery_tasks:celery_app worker -Q nlp --loglevel=INFO -n nlp@%h
-celery -A apps.workers.celery_tasks:celery_app worker -Q mood --loglevel=INFO -n mood@%h
-```
-
-## Observability and Resilience
-
-Что добавлено:
-- Structured JSON logs (`apps/common/observability.py`)
-- Sentry integration (optional via `SENTRY_DSN`)
-- Prometheus metrics endpoint: `GET /metrics` на gateway и orchestrator
-- Таймауты/ретраи:
-  - gateway -> orchestrator HTTP call
-  - retry policy на Celery tasks (queue-level)
-- Fallback:
-  - cache fallback (in-memory if Redis недоступен)
-  - recommendation fallback к collaborative mode при сбоях mode-specific обработки
-
-Проверка метрик:
-
-```bash
-curl http://localhost:8000/metrics | head
-curl http://localhost:8001/metrics | head
-```
-
-## First staging deploy
-
-Состав staging стека:
-- `gateway`
-- `orchestrator`
-- `cf-worker`
-- `nlp-worker`
-- `mood-worker`
-- `postgres`
-- `redis`
-
-Файлы:
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/docker-compose.staging.yml`
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/Dockerfile`
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/staging_bootstrap.sh`
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/scripts/smoke_check_staging.py`
-
-Локальный staging bootstrap:
-
-```bash
-./scripts/staging_bootstrap.sh
-```
-
-Перед staging/prod обязательно задать секреты в `.env`:
-
-```env
-JWT_SECRET_KEY=<strong-random-secret>
-```
-
-Что делает bootstrap:
-1. Поднимает staging compose stack
-2. Применяет миграции (`alembic upgrade head`)
-3. Загружает sample data ingestion
-4. Запускает smoke-check (`login + recommendations for all 3 modes`)
-
-CI/CD gating:
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/.github/workflows/cd.yml`
-- В `staging` deploy: optional smoke-check через `STAGING_SMOKE_BASE_URL`
-- В `production` deploy: обязательная проверка staging smoke перед прод-деплоем
-
-Новые GitHub secrets для smoke:
-- `STAGING_SMOKE_BASE_URL` (например `https://staging.example.com`)
-- `STAGING_SMOKE_EMAIL` (optional)
-- `STAGING_SMOKE_PASSWORD` (optional)
-
-## Tests
-
-Минимальный набор добавлен:
-- Unit: `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/tests/unit/test_recommender.py`
-- Integration API: `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/tests/integration/test_orchestrator_api.py`
-- Smoke E2E: `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/tests/smoke/test_e2e_gateway_flow.py`
-
-Локальный запуск:
-
-```bash
-source .venv/bin/activate
-pytest -q
-```
-
-CI:
-- `/Users/nikitaradcenko/Documents/Work/CourseProject/MovieMatch/.github/workflows/ci.yml`
-- job `Python checks` автоматически выполняет `pytest -q`, если папка `tests` существует.
-
-## Database (SQLAlchemy + Alembic)
-
-Добавлено:
-- SQLAlchemy ORM модели: `/apps/common/db/models.py`
-- Session/engine: `/apps/common/db/session.py`
-- Alembic config: `/alembic.ini`, `/alembic/env.py`
-- Первая миграция: `/alembic/versions/0001_create_initial_tables.py`
-
-Созданные таблицы:
-- `users`
-- `movies`
-- `user_ratings`
-- `recommendation_requests`
-- `recommendation_results`
-
-## CI/CD (GitHub Actions)
-
-В репозитории добавлены workflow:
-- `.github/workflows/ci.yml` — проверки на PR и push
-- `.github/workflows/cd.yml` — деплой по окружениям:
-  - `develop` -> `staging`
-  - `main` -> `production`
-
-Есть и ручной запуск: `Actions -> CD -> Run workflow` с выбором `staging` или `production`.
-
-## GitHub Secrets
-
-Открой: `Settings -> Secrets and variables -> Actions -> New repository secret`
-
-### Staging
-- `STAGING_RENDER_DEPLOY_HOOK_URL`
-- `STAGING_RAILWAY_DEPLOY_HOOK_URL`
-- `STAGING_HEALTHCHECK_URL`
-
-### Production
-- `PRODUCTION_RENDER_DEPLOY_HOOK_URL`
-- `PRODUCTION_RAILWAY_DEPLOY_HOOK_URL`
-- `PRODUCTION_HEALTHCHECK_URL`
-
-Для каждого окружения достаточно одного deploy hook (Render или Railway).
-
-## Как это работает
-
-1. Любой PR запускает `CI`.
-2. Push в `develop` запускает `CD` в `staging`.
-3. Push в `main` запускает `CD` в `production`.
-4. После деплоя выполняется healthcheck (если URL задан).
-
-## Дальше
-
-Когда появится код проекта, `CI` автоматически начнёт запускать:
-- Python проверки и тесты (если есть `requirements.txt`/`pyproject.toml` и папка `tests`)
-- Frontend проверки (если есть `frontend/package.json`)
-- Проверку Docker Compose (если есть `docker-compose.yml`)
+MIT

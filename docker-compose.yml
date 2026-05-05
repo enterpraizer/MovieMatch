@@ -1,38 +1,174 @@
-version: "3.9"
+version: '3.9'
 
 services:
+
+  # PostgreSQL with pgvector extension for storing ML embeddings
   postgres:
-    image: postgres:16-alpine
-    container_name: moviematch-postgres
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "${POSTGRES_PORT}:5432"
+      POSTGRES_DB: moviematch
+      POSTGRES_USER: moviematch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["5432:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U moviematch -d moviematch"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
+  # Redis for API caching, JWT blacklist, and Celery task queue
   redis:
     image: redis:7-alpine
-    container_name: moviematch-redis
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT}:6379"
-    volumes:
-      - redis_data:/data
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 3s
+      retries: 3
+
+  # FastAPI main backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app  # hot reload in development
+    ports: ["8000:8000"]
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://moviematch:${POSTGRES_PASSWORD:-changeme}@postgres:5432/moviematch
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-minimum-32-chars-change-in-prod}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      ML_RECSYS_URL: http://ml-recsys:8001
+      ML_NLP_URL: http://ml-nlp:8002
+      ML_CV_URL: http://ml-cv:8003
+      LOG_LEVEL: DEBUG
+      ALLOWED_ORIGINS: http://localhost:3000
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # RecSys Two-Tower inference service
+  ml-recsys:
+    build:
+      context: ./ml/recsys
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./ml/models:/models:ro
+      - ./ml/recsys:/app
+      - ./mlruns:/mlruns
+    ports: ["8001:8001"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://moviematch:${POSTGRES_PASSWORD:-changeme}@postgres:5432/moviematch
+      MLFLOW_TRACKING_URI: /mlruns
+      MODELS_DIR: /models
+
+  # NLP semantic search service (downloads ~80MB model on first run)
+  ml-nlp:
+    build:
+      context: ./ml/nlp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./ml/models:/models:ro
+      - ./ml/nlp:/app
+      - nlp_model_cache:/root/.cache/huggingface  # persist model download
+    ports: ["8002:8002"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      POSTGRES_URL: postgresql://moviematch:${POSTGRES_PASSWORD:-changeme}@postgres:5432/moviematch
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface
+
+  # CV emotion detection ONNX service (stateless, no DB needed)
+  ml-cv:
+    build:
+      context: ./ml/cv
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./ml/models:/models:ro
+      - ./ml/cv:/app
+    ports: ["8003:8003"]
+    environment:
+      ONNX_MODEL_PATH: /models/emotion_model.onnx
+      MODELS_DIR: /models
+
+  # Next.js frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules    # keep node_modules in container
+      - /app/.next           # keep .next build cache in container
+    ports: ["3000:3000"]
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on: [backend]
+
+  # MLflow model registry and experiment tracking UI
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.18.0
+    restart: unless-stopped
+    volumes:
+      - ./mlruns:/mlruns
+    ports: ["5000:5000"]
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri /mlruns
+
+  # Celery worker — processes background tasks (embedding refresh, retraining)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://moviematch:${POSTGRES_PASSWORD:-changeme}@postgres:5432/moviematch
+      REDIS_URL: redis://redis:6379/0
+      ML_NLP_URL: http://ml-nlp:8002
+
+  # Celery beat — cron scheduler for periodic tasks
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    command: celery -A workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    volumes:
+      - ./backend:/app
+    depends_on: [redis]
+    environment:
+      REDIS_URL: redis://redis:6379/0
 
 volumes:
   postgres_data:
-  redis_data:
+  nlp_model_cache:
