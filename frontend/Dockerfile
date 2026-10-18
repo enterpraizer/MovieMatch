@@ -20,6 +20,11 @@ RUN pnpm build
 
 # Stage 5: production runner — minimal image
 FROM node:20-alpine AS production
+# The runtime only needs node: patch OS packages and drop the bundled package managers.
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* \
+       /usr/local/bin/yarn /usr/local/bin/yarnpkg
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 WORKDIR /app
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

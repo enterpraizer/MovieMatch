@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 curl build-essential \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel uv
 WORKDIR /app
 
 # Stage 2: deps — install all Python packages
@@ -24,6 +24,9 @@ COPY --from=deps /usr/local/lib/python3.12/site-packages/ \
     /usr/local/lib/python3.12/site-packages/
 COPY --from=deps /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 COPY --from=deps /usr/local/bin/alembic /usr/local/bin/alembic
+# pip is only needed at build time and vendors its own outdated copies of urllib3/msgpack.
+RUN rm -rf /usr/local/lib/python3.12/site-packages/pip /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
+    /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY . .
 RUN chown -R app:app /app
 USER app
