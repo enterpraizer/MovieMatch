@@ -2,7 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Search, SlidersHorizontal, Loader2, X, Film, Star, Flame, Calendar, TrendingUp, ArrowRight } from "lucide-react";
+import {
+  Search,
+  SlidersHorizontal,
+  Loader2,
+  X,
+  Film,
+  Star,
+  Flame,
+  Calendar,
+  TrendingUp,
+  ArrowRight,
+} from "lucide-react";
 import { MovieGrid, type MovieCardMovie } from "@/components/features/movie-card";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 
@@ -21,18 +32,45 @@ const clampYear = (v: string): string => {
 };
 
 const GENRES = [
-  "Action", "Adventure", "Animation", "Children", "Comedy", "Crime",
-  "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror", "Musical",
-  "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western",
+  "Action",
+  "Adventure",
+  "Animation",
+  "Children",
+  "Comedy",
+  "Crime",
+  "Documentary",
+  "Drama",
+  "Fantasy",
+  "Film-Noir",
+  "Horror",
+  "Musical",
+  "Mystery",
+  "Romance",
+  "Sci-Fi",
+  "Thriller",
+  "War",
+  "Western",
 ];
 
 const GENRE_SLUG: Record<string, string> = {
-  Action: "action", Adventure: "adventure", Animation: "animation",
-  Children: "children", Comedy: "comedy", Crime: "crime",
-  Documentary: "documentary", Drama: "drama", Fantasy: "fantasy",
-  "Film-Noir": "film-noir", Horror: "horror", Musical: "musical",
-  Mystery: "mystery", Romance: "romance", "Sci-Fi": "sci-fi",
-  Thriller: "thriller", War: "war", Western: "western",
+  Action: "action",
+  Adventure: "adventure",
+  Animation: "animation",
+  Children: "children",
+  Comedy: "comedy",
+  Crime: "crime",
+  Documentary: "documentary",
+  Drama: "drama",
+  Fantasy: "fantasy",
+  "Film-Noir": "film-noir",
+  Horror: "horror",
+  Musical: "musical",
+  Mystery: "mystery",
+  Romance: "romance",
+  "Sci-Fi": "sci-fi",
+  Thriller: "thriller",
+  War: "war",
+  Western: "western",
 };
 
 type OrderBy = "popularity" | "rating" | "year";
@@ -153,11 +191,17 @@ export default function BrowsePage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-sm font-semibold"
+            style={{ color: "var(--foreground)" }}
+          >
             <Film className="h-4 w-4" style={{ color: "var(--tab-collaborative)" }} />
             MovieMatch
           </Link>
-          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>/ Browse</span>
+          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+            / Browse
+          </span>
         </div>
       </header>
 
@@ -199,7 +243,8 @@ export default function BrowsePage() {
             aria-label="Toggle filters"
             className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
             style={{
-              backgroundColor: showFilters || hasActiveFilters ? "var(--tab-collaborative)" : "var(--secondary)",
+              backgroundColor:
+                showFilters || hasActiveFilters ? "var(--tab-collaborative)" : "var(--secondary)",
               color: showFilters || hasActiveFilters ? "white" : "var(--secondary-foreground)",
             }}
           >
@@ -243,10 +288,7 @@ export default function BrowsePage() {
                   className="h-4 w-4"
                   style={{ color: "var(--tab-collaborative)" }}
                 />
-                <h3
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--foreground)" }}
-                >
+                <h3 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
                   Refine catalog
                 </h3>
               </div>
@@ -335,7 +377,10 @@ export default function BrowsePage() {
                       color: "var(--foreground)",
                     }}
                   />
-                  <ArrowRight className="h-3 w-3 shrink-0" style={{ color: "var(--muted-foreground)" }} />
+                  <ArrowRight
+                    className="h-3 w-3 shrink-0"
+                    style={{ color: "var(--muted-foreground)" }}
+                  />
                   <input
                     type="number"
                     inputMode="numeric"
@@ -367,7 +412,10 @@ export default function BrowsePage() {
                     className="text-[10px] font-semibold uppercase tracking-wider"
                     style={{ color: "var(--muted-foreground)" }}
                   >
-                    Min rating {minRating && <span style={{ color: "var(--foreground)" }}>· {minRating}+</span>}
+                    Min rating{" "}
+                    {minRating && (
+                      <span style={{ color: "var(--foreground)" }}>· {minRating}+</span>
+                    )}
                   </label>
                 </div>
                 <div className="flex items-center gap-1">
@@ -379,9 +427,7 @@ export default function BrowsePage() {
                       <button
                         key={n}
                         type="button"
-                        onClick={() =>
-                          setMinRating(minRating === nextVal ? "" : nextVal)
-                        }
+                        onClick={() => setMinRating(minRating === nextVal ? "" : nextVal)}
                         aria-label={`Set minimum rating to ${n}`}
                         className="relative p-1 transition-transform hover:scale-110"
                       >
@@ -456,10 +502,7 @@ export default function BrowsePage() {
               </div>
             </div>
 
-            <p
-              className="text-[11px] pl-2"
-              style={{ color: "var(--subtle-foreground)" }}
-            >
+            <p className="text-[11px] pl-2" style={{ color: "var(--subtle-foreground)" }}>
               Filters apply when the search box is empty.
             </p>
           </div>
@@ -477,11 +520,7 @@ export default function BrowsePage() {
         <MovieGrid
           movies={movies}
           isLoading={loading && movies.length === 0}
-          emptyMessage={
-            query
-              ? `No movies found for "${query}"`
-              : "No movies match these filters"
-          }
+          emptyMessage={query ? `No movies found for "${query}"` : "No movies match these filters"}
         />
 
         {!isSearchMode && nextCursor != null && (
@@ -510,7 +549,7 @@ export default function BrowsePage() {
 
         {!isSearchMode && nextCursor == null && movies.length > 0 && !loading && (
           <p className="text-center text-xs py-4" style={{ color: "var(--subtle-foreground)" }}>
-            You've reached the end ({movies.length} movies)
+            You&apos;ve reached the end ({movies.length} movies)
           </p>
         )}
       </main>

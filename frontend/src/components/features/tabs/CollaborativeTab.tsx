@@ -30,7 +30,13 @@ export function CollaborativeTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<
-    { id: number; title: string; year: number | null; poster_url: string | null; avg_rating: number | null }[]
+    {
+      id: number;
+      title: string;
+      year: number | null;
+      poster_url: string | null;
+      avg_rating: number | null;
+    }[]
   >([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
   const autoFetched = useRef(false);
@@ -41,10 +47,20 @@ export function CollaborativeTab() {
     //   /onboarding — divisive (each rating carries more signal)
     // Blend: trending first, then divisive, de-duped by id. This way the
     // "Rate more" grid leads with familiar titles then goes deeper.
-    type Pick = { id: number; title: string; year: number | null; poster_url: string | null; avg_rating: number | null };
+    type Pick = {
+      id: number;
+      title: string;
+      year: number | null;
+      poster_url: string | null;
+      avg_rating: number | null;
+    };
     Promise.all([
-      fetch(`${API_URL}/v1/movies/trending`).then((r) => r.json()).catch(() => []),
-      fetch(`${API_URL}/v1/movies/onboarding?limit=40`).then((r) => r.json()).catch(() => []),
+      fetch(`${API_URL}/v1/movies/trending`)
+        .then((r) => r.json())
+        .catch(() => []),
+      fetch(`${API_URL}/v1/movies/onboarding?limit=40`)
+        .then((r) => r.json())
+        .catch(() => []),
     ])
       .then(([trending, divisive]) => {
         const popArr: Pick[] = Array.isArray(trending) ? trending : [];
@@ -52,10 +68,16 @@ export function CollaborativeTab() {
         const seen = new Set<number>();
         const merged: Pick[] = [];
         for (const m of popArr) {
-          if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); }
+          if (!seen.has(m.id)) {
+            merged.push(m);
+            seen.add(m.id);
+          }
         }
         for (const m of divArr) {
-          if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); }
+          if (!seen.has(m.id)) {
+            merged.push(m);
+            seen.add(m.id);
+          }
         }
         setTrendingMovies(merged);
       })
@@ -72,13 +94,13 @@ export function CollaborativeTab() {
           autoFetched.current = true;
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const fetchRecommendations = useCallback(async () => {
-    const token = typeof window !== "undefined"
-      ? localStorage.getItem("mm_access_token")
-      : null;
+    const token = typeof window !== "undefined" ? localStorage.getItem("mm_access_token") : null;
 
     if (!token) {
       window.location.href = "/register";
@@ -152,7 +174,7 @@ export function CollaborativeTab() {
     } finally {
       setIsLoading(false);
     }
-  }, [ratings]);
+  }, []);
 
   // Auto-fetch on mount (and when the rating count changes meaningfully).
   // Backend does popularity fallback for users with no ratings, so this tab
@@ -184,10 +206,7 @@ export function CollaborativeTab() {
         {modelVersion === "popularity" ? (
           <h2 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
             Popular now
-            <span
-              className="text-sm font-normal ml-2"
-              style={{ color: "var(--muted-foreground)" }}
-            >
+            <span className="text-sm font-normal ml-2" style={{ color: "var(--muted-foreground)" }}>
               rate a few movies to personalise this
             </span>
           </h2>

@@ -60,11 +60,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function MoviePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function MoviePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const movie = await getMovie(id);
 
@@ -129,7 +125,10 @@ export default async function MoviePage({
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <Film className="h-16 w-16" style={{ color: "var(--muted-foreground)", opacity: 0.3 }} />
+                  <Film
+                    className="h-16 w-16"
+                    style={{ color: "var(--muted-foreground)", opacity: 0.3 }}
+                  />
                 </div>
               )}
             </div>
@@ -149,7 +148,10 @@ export default async function MoviePage({
             <div className="flex flex-wrap items-center gap-3">
               {movie.avg_rating != null && (
                 <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4" style={{ fill: "var(--accent)", color: "var(--accent)" }} />
+                  <Star
+                    className="h-4 w-4"
+                    style={{ fill: "var(--accent)", color: "var(--accent)" }}
+                  />
                   <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
                     {movie.avg_rating.toFixed(1)}
                   </span>
@@ -229,7 +231,10 @@ export default async function MoviePage({
                         className="object-cover w-full h-full"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-lg" style={{ color: "var(--muted-foreground)" }}>
+                      <div
+                        className="w-full h-full flex items-center justify-center text-lg"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         {c.person.name[0]}
                       </div>
                     )}

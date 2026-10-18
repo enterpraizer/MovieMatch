@@ -45,10 +45,7 @@ export function RatingOnboarding({
   const progress = Math.min(100, (ratingCount / requiredCount) * 100);
   const isReady = mounted && ratingCount >= requiredCount;
 
-  const queue = useMemo(
-    () => movies.filter((m) => !(m.id in userRatings)),
-    [movies, userRatings],
-  );
+  const queue = useMemo(() => movies.filter((m) => !(m.id in userRatings)), [movies, userRatings]);
   const current = queue[swipeIndex];
   const upcoming = queue[swipeIndex + 1];
 
@@ -129,7 +126,11 @@ export function RatingOnboarding({
           ) : !current ? (
             <div
               className="mx-auto w-full max-w-sm rounded-xl p-6 text-center"
-              style={{ backgroundColor: "var(--card)", borderWidth: 1, borderColor: "var(--border)" }}
+              style={{
+                backgroundColor: "var(--card)",
+                borderWidth: 1,
+                borderColor: "var(--border)",
+              }}
             >
               <p className="text-sm" style={{ color: "var(--foreground)" }}>
                 No more cards — switch to grid to review or fine-tune your ratings.
@@ -158,7 +159,11 @@ export function RatingOnboarding({
                   exit={{ opacity: 0, x: 0 }}
                   whileDrag={{ cursor: "grabbing" }}
                   className="absolute inset-0 rounded-xl overflow-hidden cursor-grab"
-                  style={{ backgroundColor: "var(--card)", borderWidth: 1, borderColor: "var(--border)" }}
+                  style={{
+                    backgroundColor: "var(--card)",
+                    borderWidth: 1,
+                    borderColor: "var(--border)",
+                  }}
                 >
                   <MoviePoster movie={current} showTitle />
                 </motion.div>
@@ -235,7 +240,10 @@ export function RatingOnboarding({
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <Film className="h-8 w-8" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
+                        <Film
+                          className="h-8 w-8"
+                          style={{ color: "var(--muted-foreground)", opacity: 0.4 }}
+                        />
                       </div>
                     )}
                   </div>
@@ -258,7 +266,10 @@ export function RatingOnboarding({
 
       {/* CTA Button */}
       {isReady && (
-        <div className={`flex justify-center ${mode === "swipe" ? "mt-20" : ""}`} style={{ animation: "tab-enter 0.3s ease-out" }}>
+        <div
+          className={`flex justify-center ${mode === "swipe" ? "mt-20" : ""}`}
+          style={{ animation: "tab-enter 0.3s ease-out" }}
+        >
           <button
             type="button"
             onClick={(e) => {
@@ -308,8 +319,7 @@ function MoviePoster({ movie, showTitle }: { movie: TrendingMovie; showTitle?: b
         <div
           className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-1"
           style={{
-            background:
-              "linear-gradient(to top, oklch(0 0 0 / 0.85), oklch(0 0 0 / 0.1))",
+            background: "linear-gradient(to top, oklch(0 0 0 / 0.85), oklch(0 0 0 / 0.1))",
           }}
         >
           <h4 className="text-base font-semibold text-white line-clamp-2">{movie.title}</h4>

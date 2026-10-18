@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,8 +33,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 function PasswordStrength({ password }: { password: string }) {
   const { label, percent, color } = useMemo(() => {
     if (password.length === 0) return { label: "", percent: 0, color: "transparent" };
-    if (password.length < 8)
-      return { label: "Weak", percent: 25, color: "var(--destructive)" };
+    if (password.length < 8) return { label: "Weak", percent: 25, color: "var(--destructive)" };
     const hasUpper = /[A-Z]/.test(password);
     const hasDigit = /\d/.test(password);
     if (hasUpper && hasDigit)
@@ -64,7 +62,6 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "busy" | "sent">("idle");
@@ -166,11 +163,12 @@ export default function RegisterPage() {
           </h1>
           <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
             We sent a verification link to{" "}
-            <strong style={{ color: "var(--foreground)" }}>{registeredEmail}</strong>.
-            Click it to activate your account and start rating movies.
+            <strong style={{ color: "var(--foreground)" }}>{registeredEmail}</strong>. Click it to
+            activate your account and start rating movies.
           </p>
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            Didn&apos;t get it? Check spam, or resend below. In dev mode the link is printed to the backend log.
+            Didn&apos;t get it? Check spam, or resend below. In dev mode the link is printed to the
+            backend log.
           </p>
           {resendState === "sent" ? (
             <p
@@ -191,11 +189,7 @@ export default function RegisterPage() {
               {resendState === "busy" ? "Sending…" : "Resend email"}
             </button>
           )}
-          <Link
-            href="/login"
-            className="mt-2 text-xs"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+          <Link href="/login" className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
             Already verified? Sign in
           </Link>
         </div>

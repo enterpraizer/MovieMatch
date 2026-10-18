@@ -14,19 +14,19 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
       ref={ref}
       className={cn(
         "relative h-2 w-full overflow-hidden rounded-full bg-[var(--secondary)]",
-        className
+        className,
       )}
       {...props}
     >
       <div
         className={cn(
           "h-full transition-all duration-300 ease-out rounded-full",
-          indicatorClassName ?? "bg-[var(--primary)]"
+          indicatorClassName ?? "bg-[var(--primary)]",
         )}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>
-  )
+  ),
 );
 Progress.displayName = "Progress";
 

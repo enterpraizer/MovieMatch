@@ -63,9 +63,7 @@ describe("MovieCard", () => {
 
   it("has aria-label with title and year", () => {
     render(<MovieCard movie={baseMovie} />);
-    expect(
-      screen.getByLabelText("The Matrix (1999)")
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("The Matrix (1999)")).toBeInTheDocument();
   });
 
   it("renders rating", () => {

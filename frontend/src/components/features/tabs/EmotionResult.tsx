@@ -29,12 +29,7 @@ interface EmotionResultProps {
   message: string;
 }
 
-export function EmotionResult({
-  emotion,
-  confidence,
-  allScores,
-  message,
-}: EmotionResultProps) {
+export function EmotionResult({ emotion, confidence, allScores, message }: EmotionResultProps) {
   const emoji = EMOTION_EMOJI[emotion] ?? "🎬";
   const sorted = Object.entries(allScores).sort(([, a], [, b]) => b - a);
   const maxScore = Math.max(...Object.values(allScores), 0.01);

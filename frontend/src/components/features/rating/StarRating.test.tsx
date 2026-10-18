@@ -30,9 +30,7 @@ describe("StarRating", () => {
   it("shows filled stars up to current rating", () => {
     useRatingsStore.setState({ ratings: { 20: 4 } });
     const { container } = render(<StarRating movieId={20} movieTitle="Test" />);
-    const filledStars = container.querySelectorAll(
-      'svg[class*="fill-"]'
-    );
+    const filledStars = container.querySelectorAll('svg[class*="fill-"]');
     expect(filledStars.length).toBeGreaterThanOrEqual(4);
   });
 

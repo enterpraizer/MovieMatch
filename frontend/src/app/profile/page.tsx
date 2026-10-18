@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import Image from "next/image";
 import {
   ArrowLeft,
   Loader2,
@@ -341,7 +340,10 @@ function RatingHistoryCard() {
         <ul className="flex flex-col divide-y" style={{ borderColor: "var(--border)" }}>
           {items.map((r) => (
             <li key={r.movie_id} className="py-2 flex items-center gap-3">
-              <Link href={`/movies/${r.movie_id}`} className="flex items-center gap-3 flex-1 min-w-0">
+              <Link
+                href={`/movies/${r.movie_id}`}
+                className="flex items-center gap-3 flex-1 min-w-0"
+              >
                 {r.poster_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -451,18 +453,22 @@ function ProfileHeader({
           <h2 className="text-lg font-semibold truncate" style={{ color: "var(--foreground)" }}>
             {user.display_name ?? "Unnamed"}
           </h2>
-          <div className="flex items-center gap-1.5 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          <div
+            className="flex items-center gap-1.5 text-sm"
+            style={{ color: "var(--muted-foreground)" }}
+          >
             <Mail className="h-3.5 w-3.5" />
             <span className="truncate">{user.email}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+            style={{ color: "var(--muted-foreground)" }}
+          >
             <span className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               Joined {formatDate(user.created_at)}
             </span>
-            {user.last_login_at && (
-              <span>Last active {formatRelative(user.last_login_at)}</span>
-            )}
+            {user.last_login_at && <span>Last active {formatRelative(user.last_login_at)}</span>}
           </div>
           {user.bio && !editing && (
             <p className="text-sm mt-2 whitespace-pre-line" style={{ color: "var(--foreground)" }}>
@@ -594,11 +600,7 @@ function WatchlistCard({
                 <div className="aspect-[2/3] relative">
                   {m.poster_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={m.poster_url}
-                      alt={m.title}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={m.poster_url} alt={m.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Film className="h-8 w-8" style={{ color: "var(--muted-foreground)" }} />
@@ -606,7 +608,10 @@ function WatchlistCard({
                   )}
                 </div>
                 <div className="p-2">
-                  <p className="text-xs font-medium truncate" style={{ color: "var(--foreground)" }}>
+                  <p
+                    className="text-xs font-medium truncate"
+                    style={{ color: "var(--foreground)" }}
+                  >
                     {m.title}
                   </p>
                   <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
@@ -644,11 +649,7 @@ function StatsCard({ stats }: { stats: UserStats | null }) {
       >
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           You haven&apos;t rated any movies yet.{" "}
-          <Link
-            href="/"
-            className="underline"
-            style={{ color: "var(--tab-collaborative)" }}
-          >
+          <Link href="/" className="underline" style={{ color: "var(--tab-collaborative)" }}>
             Rate some movies
           </Link>{" "}
           to see stats.
@@ -700,13 +701,14 @@ function StatsCard({ stats }: { stats: UserStats | null }) {
         />
       </div>
 
-      {stats.top_genres.length >= 3 && (
-        <GenreRadar genres={stats.top_genres.slice(0, 8)} />
-      )}
+      {stats.top_genres.length >= 3 && <GenreRadar genres={stats.top_genres.slice(0, 8)} />}
 
       {stats.top_genres.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h4 className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>
+          <h4
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: "var(--muted-foreground)" }}
+          >
             Top genres
           </h4>
           <div className="flex flex-col gap-1.5">
@@ -727,7 +729,10 @@ function StatsCard({ stats }: { stats: UserStats | null }) {
                     }}
                   />
                 </div>
-                <span className="text-xs tabular-nums w-10 text-right" style={{ color: "var(--muted-foreground)" }}>
+                <span
+                  className="text-xs tabular-nums w-10 text-right"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
                   {g.count}
                 </span>
               </div>
@@ -738,7 +743,10 @@ function StatsCard({ stats }: { stats: UserStats | null }) {
 
       {scoreKeys.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h4 className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>
+          <h4
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: "var(--muted-foreground)" }}
+          >
             Rating distribution
           </h4>
           <div className="flex items-end gap-1 h-28">
@@ -756,7 +764,10 @@ function StatsCard({ stats }: { stats: UserStats | null }) {
                     }}
                     title={`${k}: ${cnt}`}
                   />
-                  <span className="text-[10px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                  <span
+                    className="text-[10px] tabular-nums"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
                     {parseFloat(k).toFixed(1)}
                   </span>
                 </div>
@@ -793,9 +804,8 @@ function GenreRadar({ genres }: { genres: GenreCount[] }) {
   });
 
   const pathD =
-    points
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-      .join(" ") + " Z";
+    points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") +
+    " Z";
 
   const rings = [0.25, 0.5, 0.75, 1.0];
 
@@ -847,13 +857,7 @@ function GenreRadar({ genres }: { genres: GenreCount[] }) {
             strokeWidth="1.5"
           />
           {points.map((p, i) => (
-            <circle
-              key={`p-${i}`}
-              cx={p.x}
-              cy={p.y}
-              r="3"
-              fill="var(--tab-collaborative)"
-            />
+            <circle key={`p-${i}`} cx={p.x} cy={p.y} r="3" fill="var(--tab-collaborative)" />
           ))}
           {points.map((p, i) => (
             <text
@@ -1149,7 +1153,10 @@ function DangerZone() {
       title="Danger zone"
       outerStyle={{ borderColor: "oklch(0.35 0.08 25)" }}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg p-3" style={{ backgroundColor: "var(--secondary)" }}>
+      <div
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg p-3"
+        style={{ backgroundColor: "var(--secondary)" }}
+      >
         <div>
           <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
             Sign out
@@ -1173,7 +1180,10 @@ function DangerZone() {
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg p-3" style={{ backgroundColor: "oklch(0.18 0.04 25)" }}>
+      <div
+        className="flex flex-col gap-3 rounded-lg p-3"
+        style={{ backgroundColor: "oklch(0.18 0.04 25)" }}
+      >
         <div>
           <p className="text-sm font-medium" style={{ color: "var(--destructive)" }}>
             Delete account

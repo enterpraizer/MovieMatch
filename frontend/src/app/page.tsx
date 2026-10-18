@@ -8,9 +8,18 @@ import { useUIStore } from "@/store/ui-store";
 import { CollaborativeTab, SearchTab, EmotionTab } from "@/components/features/tabs";
 
 const POSTER_COLORS = [
-  "#1a1520", "#201828", "#18202a", "#221a1e",
-  "#1c2028", "#261c22", "#1a2420", "#201a26",
-  "#1e1a28", "#28201a", "#1a2024", "#221e1a",
+  "#1a1520",
+  "#201828",
+  "#18202a",
+  "#221a1e",
+  "#1c2028",
+  "#261c22",
+  "#1a2420",
+  "#201a26",
+  "#1e1a28",
+  "#28201a",
+  "#1a2024",
+  "#221e1a",
 ];
 
 type TabId = "collaborative" | "search" | "emotion";
@@ -37,7 +46,7 @@ export default function Home() {
         setActiveTab(TABS[(idx - 1 + TABS.length) % TABS.length].id);
       }
     },
-    [activeTab, setActiveTab]
+    [activeTab, setActiveTab],
   );
 
   return (
@@ -126,7 +135,9 @@ export default function Home() {
                   className="relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200"
                   style={{
                     color: isActive ? tab.color : "var(--muted-foreground)",
-                    backgroundColor: isActive ? `color-mix(in oklch, ${tab.color} 12%, transparent)` : "transparent",
+                    backgroundColor: isActive
+                      ? `color-mix(in oklch, ${tab.color} 12%, transparent)`
+                      : "transparent",
                   }}
                 >
                   <Icon className="h-4 w-4" />

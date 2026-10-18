@@ -29,11 +29,7 @@ interface MovieCardProps {
 function ScoreBadge({ score }: { score: number }) {
   const percent = Math.round(score * 100);
   const color =
-    percent >= 80
-      ? "bg-green-500/80"
-      : percent >= 60
-        ? "bg-yellow-500/80"
-        : "bg-gray-500/80";
+    percent >= 80 ? "bg-green-500/80" : percent >= 60 ? "bg-yellow-500/80" : "bg-gray-500/80";
   return (
     <div
       className={`absolute top-2 right-2 ${color} text-white text-xs font-semibold
@@ -81,7 +77,10 @@ export function MovieCard({
       role={onCardClick ? "button" : undefined}
     >
       {/* Poster */}
-      <div className="relative aspect-[2/3] overflow-hidden" style={{ backgroundColor: "var(--muted)" }}>
+      <div
+        className="relative aspect-[2/3] overflow-hidden"
+        style={{ backgroundColor: "var(--muted)" }}
+      >
         {!imgError && movie.poster_url ? (
           <Image
             src={movie.poster_url}
@@ -94,7 +93,10 @@ export function MovieCard({
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <Film className="h-12 w-12" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
+            <Film
+              className="h-12 w-12"
+              style={{ color: "var(--muted-foreground)", opacity: 0.4 }}
+            />
           </div>
         )}
 
@@ -116,7 +118,10 @@ export function MovieCard({
 
       {/* Info */}
       <div className="flex flex-col gap-1.5 p-3 flex-1">
-        <h3 className="font-medium text-sm leading-tight line-clamp-2" style={{ color: "var(--foreground)" }}>
+        <h3
+          className="font-medium text-sm leading-tight line-clamp-2"
+          style={{ color: "var(--foreground)" }}
+        >
           {movie.title}
           {movie.year && (
             <span className="font-normal ml-1" style={{ color: "var(--muted-foreground)" }}>
@@ -148,10 +153,7 @@ export function MovieCard({
 
         {movie.avg_rating != null && (
           <div className="flex items-center gap-1 mt-auto">
-            <Star
-              className="h-3 w-3"
-              style={{ fill: "var(--accent)", color: "var(--accent)" }}
-            />
+            <Star className="h-3 w-3" style={{ fill: "var(--accent)", color: "var(--accent)" }} />
             <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
               {movie.avg_rating.toFixed(1)}
             </span>

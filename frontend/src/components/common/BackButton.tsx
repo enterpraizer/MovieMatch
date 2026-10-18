@@ -11,12 +11,7 @@ interface BackButtonProps {
   children: React.ReactNode;
 }
 
-export function BackButton({
-  fallbackHref = "/",
-  className,
-  style,
-  children,
-}: BackButtonProps) {
+export function BackButton({ fallbackHref = "/", className, style, children }: BackButtonProps) {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(false);
 
@@ -30,12 +25,7 @@ export function BackButton({
 
   if (canGoBack) {
     return (
-      <button
-        type="button"
-        onClick={() => router.back()}
-        className={className}
-        style={style}
-      >
+      <button type="button" onClick={() => router.back()} className={className} style={style}>
         {children}
       </button>
     );

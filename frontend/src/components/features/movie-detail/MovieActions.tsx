@@ -108,7 +108,11 @@ export function MovieActions({ movieId, title, year }: MovieActionsProps) {
               borderColor: inWatchlist ? "transparent" : "var(--border)",
             }}
           >
-            {inWatchlist ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+            {inWatchlist ? (
+              <BookmarkCheck className="h-3.5 w-3.5" />
+            ) : (
+              <Bookmark className="h-3.5 w-3.5" />
+            )}
             {inWatchlist ? "Saved" : "Save to watch"}
           </button>
         )}
@@ -131,7 +135,10 @@ export function MovieActions({ movieId, title, year }: MovieActionsProps) {
 
       {/* Watch links */}
       <div className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+        <p
+          className="text-xs uppercase tracking-wider"
+          style={{ color: "var(--muted-foreground)" }}
+        >
           Watch now
         </p>
         <div className="flex flex-wrap gap-2">

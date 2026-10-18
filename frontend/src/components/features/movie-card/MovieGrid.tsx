@@ -50,10 +50,7 @@ export function MovieGrid({
           className="h-16 w-16"
           style={{ color: "var(--muted-foreground)", opacity: 0.3 }}
         />
-        <p
-          className="text-sm text-center max-w-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
+        <p className="text-sm text-center max-w-xs" style={{ color: "var(--muted-foreground)" }}>
           {emptyMessage}
         </p>
       </div>

@@ -76,7 +76,15 @@ export function SearchTab() {
   // Persist state on every change — cheap JSON serialize.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const snapshot: PersistedState = { query, results, yearFrom, yearTo, minRating, offset, hasMore };
+    const snapshot: PersistedState = {
+      query,
+      results,
+      yearFrom,
+      yearTo,
+      minRating,
+      offset,
+      hasMore,
+    };
     try {
       sessionStorage.setItem(STATE_KEY, JSON.stringify(snapshot));
     } catch {
@@ -122,9 +130,7 @@ export function SearchTab() {
         setResults((prev) => (append ? [...prev, ...items] : items));
         setHasPreviousData((append ? results.length : items.length) > 0);
         // Page is full + room left below MAX_OFFSET ⇒ assume more exists.
-        setHasMore(
-          items.length === PAGE_SIZE && explicitOffset + PAGE_SIZE < MAX_OFFSET,
-        );
+        setHasMore(items.length === PAGE_SIZE && explicitOffset + PAGE_SIZE < MAX_OFFSET);
         setOffset(explicitOffset + items.length);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Search failed");
@@ -193,7 +199,12 @@ export function SearchTab() {
               <X className="h-4 w-4" style={{ color: "var(--muted-foreground)" }} />
             </button>
           )}
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin shrink-0" style={{ color: "var(--tab-search)" }} />}
+          {isLoading && (
+            <Loader2
+              className="h-4 w-4 animate-spin shrink-0"
+              style={{ color: "var(--tab-search)" }}
+            />
+          )}
         </div>
         <button
           onClick={() => setShowFilters((v) => !v)}
@@ -232,16 +243,26 @@ export function SearchTab() {
                   onChange={(e) => setYearFrom(e.target.value)}
                   placeholder="From"
                   className="w-20 px-2 py-1 rounded text-xs bg-transparent outline-none"
-                  style={{ borderWidth: 1, borderColor: "var(--border)", color: "var(--foreground)" }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "var(--border)",
+                    color: "var(--foreground)",
+                  }}
                 />
-                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>—</span>
+                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  —
+                </span>
                 <input
                   type="number"
                   value={yearTo}
                   onChange={(e) => setYearTo(e.target.value)}
                   placeholder="To"
                   className="w-20 px-2 py-1 rounded text-xs bg-transparent outline-none"
-                  style={{ borderWidth: 1, borderColor: "var(--border)", color: "var(--foreground)" }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "var(--border)",
+                    color: "var(--foreground)",
+                  }}
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -257,7 +278,11 @@ export function SearchTab() {
                   onChange={(e) => setMinRating(e.target.value)}
                   placeholder="3.5"
                   className="w-16 px-2 py-1 rounded text-xs bg-transparent outline-none"
-                  style={{ borderWidth: 1, borderColor: "var(--border)", color: "var(--foreground)" }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "var(--border)",
+                    color: "var(--foreground)",
+                  }}
                 />
               </div>
             </div>
@@ -340,10 +365,7 @@ export function SearchTab() {
           )}
 
           {!hasMore && !isLoading && results.length >= PAGE_SIZE && (
-            <p
-              className="text-center text-xs pt-2"
-              style={{ color: "var(--muted-foreground)" }}
-            >
+            <p className="text-center text-xs pt-2" style={{ color: "var(--muted-foreground)" }}>
               End of results — refine the query to find more.
             </p>
           )}

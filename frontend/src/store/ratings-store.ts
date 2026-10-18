@@ -16,16 +16,20 @@ interface RatingsState {
 // before signup); their store is pushed up once they log in.
 function syncPut(movieId: number, score: number): void {
   if (typeof window === "undefined" || !getToken()) return;
-  void (api as unknown as {
-    POST: (path: string, init: { body: unknown }) => Promise<unknown>;
-  }).POST("/v1/ratings", { body: { movie_id: movieId, score } });
+  void (
+    api as unknown as {
+      POST: (path: string, init: { body: unknown }) => Promise<unknown>;
+    }
+  ).POST("/v1/ratings", { body: { movie_id: movieId, score } });
 }
 
 function syncDelete(movieId: number): void {
   if (typeof window === "undefined" || !getToken()) return;
-  void (api as unknown as {
-    DELETE: (path: string) => Promise<unknown>;
-  }).DELETE(`/v1/ratings/${movieId}`);
+  void (
+    api as unknown as {
+      DELETE: (path: string) => Promise<unknown>;
+    }
+  ).DELETE(`/v1/ratings/${movieId}`);
 }
 
 export const useRatingsStore = create<RatingsState>()(
@@ -40,7 +44,7 @@ export const useRatingsStore = create<RatingsState>()(
               ratings: { ...state.ratings, [movieId]: score },
             }),
             false,
-            "setRating"
+            "setRating",
           );
           syncPut(movieId, score);
         },
@@ -52,7 +56,7 @@ export const useRatingsStore = create<RatingsState>()(
               return { ratings: rest };
             },
             false,
-            "removeRating"
+            "removeRating",
           );
           syncDelete(movieId);
         },
@@ -64,9 +68,11 @@ export const useRatingsStore = create<RatingsState>()(
           // /collaborative DB fallback doesn't resurrect old ratings.
           if (typeof window !== "undefined" && getToken()) {
             try {
-              await (api as unknown as {
-                DELETE: (path: string) => Promise<unknown>;
-              }).DELETE("/v1/ratings/me");
+              await (
+                api as unknown as {
+                  DELETE: (path: string) => Promise<unknown>;
+                }
+              ).DELETE("/v1/ratings/me");
             } catch {
               /* best-effort: local store already cleared */
             }
@@ -78,12 +84,14 @@ export const useRatingsStore = create<RatingsState>()(
         hydrateFromServer: async () => {
           if (typeof window === "undefined" || !getToken()) return;
           try {
-            const resp = await (api as unknown as {
-              GET: (
-                path: string,
-                init?: { params?: { query?: Record<string, unknown> } },
-              ) => Promise<{ data?: { items?: Array<{ movie_id: number; score: number }> } }>;
-            }).GET("/v1/ratings/me", { params: { query: { limit: 500 } } });
+            const resp = await (
+              api as unknown as {
+                GET: (
+                  path: string,
+                  init?: { params?: { query?: Record<string, unknown> } },
+                ) => Promise<{ data?: { items?: Array<{ movie_id: number; score: number }> } }>;
+              }
+            ).GET("/v1/ratings/me", { params: { query: { limit: 500 } } });
             const items = resp.data?.items ?? [];
             const serverRatings: Record<number, number> = {};
             for (const r of items) {
@@ -115,8 +123,8 @@ export const useRatingsStore = create<RatingsState>()(
           }
         },
       }),
-      { name: "mm-ratings" }
+      { name: "mm-ratings" },
     ),
-    { name: "RatingsStore" }
-  )
+    { name: "RatingsStore" },
+  ),
 );

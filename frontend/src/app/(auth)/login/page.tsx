@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -18,7 +18,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefilledEmail = searchParams.get("email") ?? "";
@@ -245,5 +245,14 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary so the page can be prerendered.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

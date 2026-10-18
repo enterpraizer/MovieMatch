@@ -35,9 +35,7 @@ export function isTokenExpired(token: string): boolean {
 }
 
 async function refreshTokens(): Promise<boolean> {
-  const refreshToken = typeof window !== "undefined"
-    ? localStorage.getItem(REFRESH_KEY)
-    : null;
+  const refreshToken = typeof window !== "undefined" ? localStorage.getItem(REFRESH_KEY) : null;
   if (!refreshToken) return false;
 
   try {

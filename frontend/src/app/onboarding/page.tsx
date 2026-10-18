@@ -105,7 +105,10 @@ export default function OnboardingPage() {
 
         <div className="flex items-center gap-3">
           <Progress value={progress} />
-          <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--muted-foreground)" }}>
+          <span
+            className="text-xs tabular-nums shrink-0"
+            style={{ color: "var(--muted-foreground)" }}
+          >
             {mounted ? ratingCount : 0}/{TARGET}
           </span>
         </div>
@@ -115,7 +118,10 @@ export default function OnboardingPage() {
             className="h-[420px] sm:h-[480px] rounded-xl flex items-center justify-center"
             style={{ backgroundColor: "var(--card)" }}
           >
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--muted-foreground)" }} />
+            <Loader2
+              className="h-6 w-6 animate-spin"
+              style={{ color: "var(--muted-foreground)" }}
+            />
           </div>
         ) : ranOut ? (
           <div

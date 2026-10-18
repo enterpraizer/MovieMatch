@@ -40,9 +40,7 @@ export function EmotionTab() {
     setStep("detecting");
     setErrorMessage("");
     try {
-      const token = typeof window !== "undefined"
-        ? localStorage.getItem("mm_access_token")
-        : null;
+      const token = typeof window !== "undefined" ? localStorage.getItem("mm_access_token") : null;
 
       const form = new FormData();
       form.append("image", blob, "capture.jpg");
@@ -95,9 +93,7 @@ export function EmotionTab() {
         Processed instantly, never stored
       </div>
 
-      {step === "capture" && (
-        <CameraCapture onImageCaptured={handleImageCaptured} />
-      )}
+      {step === "capture" && <CameraCapture onImageCaptured={handleImageCaptured} />}
 
       {step === "detecting" && (
         <div className="flex flex-col items-center gap-4 py-8">
@@ -158,10 +154,7 @@ export function EmotionTab() {
             </button>
           </div>
 
-          <MovieGrid
-            movies={movies}
-            emptyMessage="No movies found for this mood. Try again!"
-          />
+          <MovieGrid movies={movies} emptyMessage="No movies found for this mood. Try again!" />
         </>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, Loader2, AlertCircle, Film } from "lucide-react";
@@ -13,7 +13,7 @@ type State =
   | { kind: "ok"; email: string; alreadyVerified: boolean }
   | { kind: "error"; code: string; message: string };
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -98,9 +98,7 @@ export default function VerifyPage() {
           <>
             <CheckCircle2 className="h-12 w-12" style={{ color: "oklch(0.7 0.18 145)" }} />
             <h1 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
-              {state.alreadyVerified
-                ? "Email already verified"
-                : "Email verified!"}
+              {state.alreadyVerified ? "Email already verified" : "Email verified!"}
             </h1>
             <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               {state.email}
@@ -131,5 +129,14 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary so the page can be prerendered.
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyPageContent />
+    </Suspense>
   );
 }

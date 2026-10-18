@@ -70,7 +70,7 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
         if (blob) onImageCaptured(blob);
       },
       "image/jpeg",
-      0.85
+      0.85,
     );
     setMode("select");
   };
@@ -99,7 +99,10 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
   if (mode === "camera") {
     return (
       <div className="flex flex-col items-center gap-3">
-        <div className="relative rounded-xl overflow-hidden" style={{ backgroundColor: "var(--card)" }}>
+        <div
+          className="relative rounded-xl overflow-hidden"
+          style={{ backgroundColor: "var(--card)" }}
+        >
           <video
             ref={videoRef}
             autoPlay
@@ -115,7 +118,10 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
               disabled={disabled}
             />
             <button
-              onClick={() => { stopCamera(); setMode("select"); }}
+              onClick={() => {
+                stopCamera();
+                setMode("select");
+              }}
               className="flex items-center justify-center h-10 w-10 rounded-full self-end"
               style={{ backgroundColor: "var(--secondary)" }}
             >
@@ -140,7 +146,10 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
             borderColor: dragOver ? "var(--tab-emotion)" : "var(--border)",
             outlineColor: "var(--tab-emotion)",
           }}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
@@ -193,16 +202,23 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
           style={{ backgroundColor: "var(--card)", borderWidth: 1, borderColor: "var(--border)" }}
         >
           <Camera className="h-8 w-8" style={{ color: "var(--tab-emotion)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>Take a selfie</span>
+          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+            Take a selfie
+          </span>
         </button>
         <button
-          onClick={() => { setError(null); setMode("upload"); }}
+          onClick={() => {
+            setError(null);
+            setMode("upload");
+          }}
           disabled={disabled}
           className="flex flex-col items-center gap-2 px-6 py-4 rounded-xl transition-colors"
           style={{ backgroundColor: "var(--card)", borderWidth: 1, borderColor: "var(--border)" }}
         >
           <Upload className="h-8 w-8" style={{ color: "var(--tab-emotion)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>Upload photo</span>
+          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+            Upload photo
+          </span>
         </button>
       </div>
     </div>

@@ -30,9 +30,7 @@ export default function SimilarPage() {
       try {
         const [detail, sim] = await Promise.all([
           fetch(`${API_URL}/v1/movies/${id}`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_URL}/v1/movies/${id}/similar?limit=24`).then((r) =>
-            r.ok ? r.json() : [],
-          ),
+          fetch(`${API_URL}/v1/movies/${id}/similar?limit=24`).then((r) => (r.ok ? r.json() : [])),
         ]);
         if (cancelled) return;
         setSourceTitle(detail?.title ?? null);
@@ -84,11 +82,7 @@ export default function SimilarPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        <MovieGrid
-          movies={items}
-          isLoading={loading}
-          emptyMessage="No similar movies found."
-        />
+        <MovieGrid movies={items} isLoading={loading} emptyMessage="No similar movies found." />
       </main>
     </div>
   );

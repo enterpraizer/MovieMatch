@@ -55,11 +55,7 @@ export const useUIStore = create<UIState>()(
             // they don't return to stale results. Cross-route navigations
             // (/movies/{id}, /profile, /browse) don't change activeTab, so
             // those still restore their search on Back.
-            if (
-              state.activeTab === "search" &&
-              tab !== "search" &&
-              typeof window !== "undefined"
-            ) {
+            if (state.activeTab === "search" && tab !== "search" && typeof window !== "undefined") {
               sessionStorage.removeItem("mm-search-state");
             }
             return { activeTab: tab };
@@ -68,8 +64,7 @@ export const useUIStore = create<UIState>()(
           "setActiveTab",
         ),
 
-      setSearchQuery: (query) =>
-        set({ searchQuery: query }, false, "setSearchQuery"),
+      setSearchQuery: (query) => set({ searchQuery: query }, false, "setSearchQuery"),
 
       setSearchFilters: (filters) =>
         set(
@@ -77,22 +72,17 @@ export const useUIStore = create<UIState>()(
             searchFilters: { ...state.searchFilters, ...filters },
           }),
           false,
-          "setSearchFilters"
+          "setSearchFilters",
         ),
 
-      setEmotionResult: (result) =>
-        set({ emotionResult: result }, false, "setEmotionResult"),
+      setEmotionResult: (result) => set({ emotionResult: result }, false, "setEmotionResult"),
 
       setCapturedImagePreview: (url) =>
         set({ capturedImagePreview: url }, false, "setCapturedImagePreview"),
 
       clearEmotionState: () =>
-        set(
-          { emotionResult: null, capturedImagePreview: null },
-          false,
-          "clearEmotionState"
-        ),
+        set({ emotionResult: null, capturedImagePreview: null }, false, "clearEmotionState"),
     }),
-    { name: "UIStore" }
-  )
+    { name: "UIStore" },
+  ),
 );

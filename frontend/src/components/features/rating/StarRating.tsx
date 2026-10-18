@@ -12,12 +12,7 @@ interface StarRatingProps {
   className?: string;
 }
 
-export function StarRating({
-  movieId,
-  movieTitle,
-  compact = false,
-  className,
-}: StarRatingProps) {
+export function StarRating({ movieId, movieTitle, compact = false, className }: StarRatingProps) {
   const storeRating = useRatingsStore((s) => s.ratings[movieId] ?? 0);
   const setRating = useRatingsStore((s) => s.setRating);
   const [hoverRating, setHoverRating] = useState(0);
@@ -41,10 +36,7 @@ export function StarRating({
   if (justRated) {
     return (
       <div
-        className={cn(
-          "flex items-center gap-1",
-          className
-        )}
+        className={cn("flex items-center gap-1", className)}
         style={{ animation: "score-badge-pop 0.3s ease-out" }}
       >
         <Check className={cn(starSize, "text-green-400")} />
@@ -64,15 +56,10 @@ export function StarRating({
     >
       {[1, 2, 3, 4, 5].map((starIndex) => {
         const filled = displayRating >= starIndex;
-        const halfFilled =
-          !filled && displayRating >= starIndex - 0.5;
+        const halfFilled = !filled && displayRating >= starIndex - 0.5;
 
         return (
-          <div
-            key={starIndex}
-            className="relative cursor-pointer"
-            data-star={starIndex}
-          >
+          <div key={starIndex} className="relative cursor-pointer" data-star={starIndex}>
             {/* Left half */}
             <div
               className="absolute inset-0 w-1/2 z-10"
@@ -113,7 +100,7 @@ export function StarRating({
                   ? "fill-[var(--accent)] text-[var(--accent)]"
                   : halfFilled
                     ? "text-[var(--accent)]"
-                    : "text-[var(--muted-foreground)]/30"
+                    : "text-[var(--muted-foreground)]/30",
               )}
               style={
                 halfFilled
@@ -125,11 +112,7 @@ export function StarRating({
                   : undefined
               }
             />
-            {halfFilled && (
-              <Star
-                className={cn(starSize, "text-[var(--muted-foreground)]/30")}
-              />
-            )}
+            {halfFilled && <Star className={cn(starSize, "text-[var(--muted-foreground)]/30")} />}
             {!halfFilled && (
               <span className="invisible">
                 <Star className={starSize} />
@@ -140,10 +123,7 @@ export function StarRating({
       })}
 
       {currentRating > 0 && !compact && (
-        <span
-          className="text-xs ml-1 tabular-nums"
-          style={{ color: "var(--muted-foreground)" }}
-        >
+        <span className="text-xs ml-1 tabular-nums" style={{ color: "var(--muted-foreground)" }}>
           {currentRating.toFixed(1)}
         </span>
       )}
