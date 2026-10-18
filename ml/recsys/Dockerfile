@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel uv
 WORKDIR /app
 COPY pyproject.toml ./
