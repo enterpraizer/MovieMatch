@@ -10,8 +10,28 @@ permissions:
   contents: read
 
 jobs:
-  deploy-staging:
+  check:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.argocd.outputs.enabled }}
+    steps:
+      - name: Check ArgoCD secrets
+        id: argocd
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          if [ -n "$ARGOCD_SERVER" ] && [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ArgoCD secrets are not configured, skipping deploy"
+          fi
+
+  deploy-staging:
+    needs: check
+    if: needs.check.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: staging
