@@ -12,6 +12,7 @@ For Gmail:
   SMTP_USER=you@gmail.com
   SMTP_PASSWORD=<app password, 16 chars>
 """
+
 from urllib.parse import quote_plus
 
 import structlog
@@ -21,10 +22,7 @@ from config import get_settings
 
 async def send_verification_email(to_email: str, token: str) -> None:
     settings = get_settings()
-    link = (
-        f"{settings.public_app_url}/verify?token={token}"
-        f"&email={quote_plus(to_email)}"
-    )
+    link = f"{settings.public_app_url}/verify?token={token}&email={quote_plus(to_email)}"
     log = structlog.get_logger()
 
     if not settings.smtp_host:
@@ -38,8 +36,9 @@ async def send_verification_email(to_email: str, token: str) -> None:
         return
 
     try:
-        import aiosmtplib
         from email.message import EmailMessage
+
+        import aiosmtplib
 
         msg = EmailMessage()
         msg["From"] = settings.smtp_from or settings.smtp_user
@@ -54,20 +53,23 @@ async def send_verification_email(to_email: str, token: str) -> None:
         )
         msg.add_alternative(
             f"""
-            <!doctype html><html><body style="font-family: sans-serif; max-width: 520px; margin: 2rem auto; color: #222;">
+            <!doctype html><html><body style="font-family: sans-serif; max-width: 520px;
+              margin: 2rem auto; color: #222;">
               <h2 style="color: #6d28d9;">Welcome to MovieMatch</h2>
               <p>Tap the button below to verify your email.
                  The link is valid for {settings.email_verification_ttl_minutes} minutes.</p>
               <p>
                 <a href="{link}" style="display: inline-block; background: #6d28d9; color: white;
-                   padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                   padding: 12px 20px; border-radius: 8px; text-decoration: none;
+                   font-weight: 600;">
                   Verify email
                 </a>
               </p>
               <p style="color: #666; font-size: 12px;">Or paste this URL into your browser:<br>
                 <a href="{link}">{link}</a>
               </p>
-              <p style="color: #999; font-size: 11px;">If you didn't sign up for MovieMatch, you can ignore this message.</p>
+              <p style="color: #999; font-size: 11px;">If you didn't sign up for MovieMatch,
+                you can ignore this message.</p>
             </body></html>
             """.strip(),
             subtype="html",

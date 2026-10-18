@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
+from redis.asyncio import Redis
 
 import metrics
 from config import get_settings
@@ -40,13 +41,14 @@ async def collaborative(
     body: CollaborativeRequest,
     request: Request,
     current_user: dict[str, Any] = Depends(get_current_user),
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> RecommendResponse:
     ratings = [r.model_dump() for r in body.ratings]
     if not ratings:
         # Fall back to the user's persisted ratings so the endpoint works
         # on a fresh device where the client has no local rating cache.
         from db.database import execute_query
+
         db_rows = await execute_query(
             "SELECT movie_id, score::float AS score FROM ratings "
             "WHERE user_id = $1::uuid ORDER BY updated_at DESC LIMIT 500",

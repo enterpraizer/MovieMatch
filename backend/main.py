@@ -1,5 +1,5 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import redis.asyncio as aioredis
 import structlog
@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_db_pool()
     logger.info("database_pool_ready")
 
-    app.state.redis = await aioredis.from_url(
+    app.state.redis = await aioredis.Redis.from_url(
         settings.redis_url,
         decode_responses=True,
         max_connections=20,
@@ -83,9 +83,7 @@ async def handle_app_exception(request: Request, exc: AppException) -> JSONRespo
 
 
 @app.exception_handler(RequestValidationError)
-async def handle_validation_error(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
         status_code=422,
         content={
@@ -131,9 +129,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/v1/auth", tags=["Auth"])
 app.include_router(movies.router, prefix="/v1/movies", tags=["Movies"])
 app.include_router(ratings.router, prefix="/v1/ratings", tags=["Ratings"])
-app.include_router(
-    recommendations.router, prefix="/v1/recommendations", tags=["Recommendations"]
-)
+app.include_router(recommendations.router, prefix="/v1/recommendations", tags=["Recommendations"])
 app.include_router(watchlist.router, prefix="/v1/watchlist", tags=["Watchlist"])
 
 

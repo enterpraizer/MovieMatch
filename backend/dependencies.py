@@ -1,8 +1,12 @@
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
+import asyncpg
+import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt import PyJWTError
+from redis.asyncio import Redis
 
 from config import get_settings
 from db.database import get_connection
@@ -10,20 +14,21 @@ from db.database import get_connection
 security = HTTPBearer(auto_error=False)
 
 
-async def get_db() -> AsyncGenerator[Any, None]:
+async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
     """Yields asyncpg connection from pool."""
     async with get_connection() as conn:
         yield conn
 
 
-async def get_redis(request: Request) -> Any:
+async def get_redis(request: Request) -> Redis:
     """Returns Redis client from app state."""
-    return request.app.state.redis
+    redis: Redis = request.app.state.redis
+    return redis
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    db: Any = Depends(get_db),
+    db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, Any]:
     if credentials is None:
         raise HTTPException(
@@ -53,7 +58,7 @@ async def get_current_user(
                 detail={"code": "INVALID_TOKEN", "message": "Token missing subject"},
             )
 
-    except JWTError as e:
+    except PyJWTError as e:
         raise HTTPException(
             status_code=401,
             detail={
@@ -61,7 +66,7 @@ async def get_current_user(
                 "message": f"Token validation failed: {str(e)}",
             },
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
     user = await db.fetchrow(
         "SELECT id::text, email, display_name, is_active, email_verified "
@@ -96,7 +101,7 @@ async def get_verified_user(
 
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    db: Any = Depends(get_db),
+    db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, Any] | None:
     """Returns user dict if authenticated, None otherwise (no error)."""
     if credentials is None:

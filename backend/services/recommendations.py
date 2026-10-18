@@ -2,6 +2,7 @@ import time
 from typing import Any
 
 import structlog
+from redis.asyncio import Redis
 
 from db.database import execute_query
 from exceptions import MLServiceUnavailableError
@@ -114,7 +115,7 @@ async def get_collaborative_recommendations(
     ratings: list[dict[str, Any]],
     limit: int,
     filters: dict[str, Any] | None,
-    redis: Any,
+    redis: Redis,
     request_id: str,
 ) -> RecommendResponse:
     start = time.perf_counter()
@@ -143,8 +144,7 @@ async def get_collaborative_recommendations(
             rows = await _enrich_recommendations(candidates)
             rows.sort(key=lambda r: scores.get(r["id"], 0.0), reverse=True)
             items = [
-                _row_to_reco(r, scores.get(r["id"], 0.0), "Based on your ratings")
-                for r in rows
+                _row_to_reco(r, scores.get(r["id"], 0.0), "Based on your ratings") for r in rows
             ]
         except MLServiceUnavailableError:
             structlog.get_logger().warning("recsys_fallback", user_id=user_id)
@@ -177,16 +177,12 @@ async def get_search_recommendations(
         candidates = await nlp_client.search(query, limit, filters, offset=offset)
         # NLP returns `rrf_score` (not `score`); preserve its ordering exactly.
         scores = {
-            int(c["movie_id"]): float(c.get("rrf_score", c.get("score", 0.0)))
-            for c in candidates
+            int(c["movie_id"]): float(c.get("rrf_score", c.get("score", 0.0))) for c in candidates
         }
         ranking = {int(c["movie_id"]): i for i, c in enumerate(candidates)}
         rows = await _enrich_recommendations(candidates)
         rows.sort(key=lambda r: ranking.get(r["id"], 10**9))
-        items = [
-            _row_to_reco(r, scores.get(r["id"], 0.0), f"Matches '{query}'")
-            for r in rows
-        ]
+        items = [_row_to_reco(r, scores.get(r["id"], 0.0), f"Matches '{query}'") for r in rows]
     except MLServiceUnavailableError:
         structlog.get_logger().warning("nlp_fallback", query=query)
         rows = await _popularity_fallback(limit)
@@ -229,9 +225,7 @@ async def get_emotion_recommendations(
     verdict = EMOTION_VERDICT.get(emotion, EMOTION_VERDICT["neutral"])
 
     rows = await _popularity_fallback(limit, genres=genres)
-    items = [
-        _row_to_reco(r, confidence, f"Matches your mood: {emotion}") for r in rows
-    ]
+    items = [_row_to_reco(r, confidence, f"Matches your mood: {emotion}") for r in rows]
 
     latency_ms = int((time.perf_counter() - start) * 1000)
     return RecommendResponse(

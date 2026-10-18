@@ -1,7 +1,7 @@
 from typing import Any
 
 
-class AppException(Exception):
+class AppException(Exception):  # noqa: N818 - public base class name used across the app
     def __init__(
         self,
         code: str,

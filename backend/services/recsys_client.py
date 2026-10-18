@@ -22,5 +22,5 @@ async def get_recommendations(
             if isinstance(data, dict):
                 return list(data.get("results") or data.get("items") or [])
             return list(data)
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
-        raise MLServiceUnavailableError("recsys")
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        raise MLServiceUnavailableError("recsys") from exc

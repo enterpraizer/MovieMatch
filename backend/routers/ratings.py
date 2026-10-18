@@ -1,13 +1,12 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Response
-
 import structlog
+from fastapi import APIRouter, Depends, Query, Response
+from redis.asyncio import Redis
 
 from db.database import execute_one, execute_query, execute_write
 from dependencies import get_current_user, get_redis, get_verified_user
 from exceptions import MovieNotFoundError, RatingNotFoundError
-from schemas.movies import MovieResponse
 from schemas.recommendations import RatingInput
 from services.cache import invalidate_user
 
@@ -18,7 +17,7 @@ router = APIRouter()
 async def rate_movie(
     data: RatingInput,
     current_user: dict[str, Any] = Depends(get_verified_user),
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     movie = await execute_one("SELECT id FROM movies WHERE id = $1", data.movie_id)
     if movie is None:
@@ -50,9 +49,11 @@ async def rate_movie(
 
     try:
         from workers.tasks.recommendations import refresh_user_embedding
+
         refresh_user_embedding.delay(user_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Embedding refresh is best-effort; never fail the rating because the broker is down.
+        structlog.get_logger().warning("user_embedding_enqueue_failed", error=str(exc))
 
     return {"movie_id": data.movie_id, "score": data.score, "message": "Rating saved"}
 
@@ -71,6 +72,7 @@ async def list_my_ratings(
         cursor_clause = f"AND r.id < ${len(params)}"
     params.append(limit + 1)
 
+    # cursor_clause only holds a "$n" placeholder; values are bound by asyncpg.
     rows = await execute_query(
         f"""
         SELECT
@@ -90,7 +92,7 @@ async def list_my_ratings(
         GROUP BY r.id, m.id
         ORDER BY r.id DESC
         LIMIT ${len(params)}
-        """,
+        """,  # noqa: S608  # nosec B608
         *params,
     )
 
@@ -116,7 +118,7 @@ async def list_my_ratings(
 @router.delete("/me", status_code=204)
 async def delete_all_my_ratings(
     current_user: dict[str, Any] = Depends(get_verified_user),
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> Response:
     """Wipe every rating the current user has — 'Start over' flow."""
     user_id = current_user["id"]
@@ -131,7 +133,7 @@ async def delete_all_my_ratings(
             await execute_write(
                 """
                 UPDATE movies SET
-                    avg_rating = COALESCE((SELECT AVG(score) FROM ratings WHERE movie_id = $1), 0),
+                    avg_rating = (SELECT AVG(score) FROM ratings WHERE movie_id = $1),
                     rating_count = COALESCE((SELECT COUNT(*) FROM ratings WHERE movie_id = $1), 0)
                 WHERE id = $1
                 """,
@@ -146,7 +148,7 @@ async def delete_all_my_ratings(
 async def delete_rating(
     movie_id: int,
     current_user: dict[str, Any] = Depends(get_verified_user),
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> Response:
     user_id = current_user["id"]
     deleted = await execute_one(

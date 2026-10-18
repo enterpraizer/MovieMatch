@@ -29,5 +29,5 @@ async def search(
             resp.raise_for_status()
             data = resp.json()
             return list(data.get("items", data) if isinstance(data, dict) else data)
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
-        raise MLServiceUnavailableError("nlp")
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        raise MLServiceUnavailableError("nlp") from exc

@@ -2,6 +2,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
+from redis.asyncio import Redis
 
 from db.database import execute_one, execute_query
 from dependencies import get_redis
@@ -57,7 +58,7 @@ async def list_movies(
     conditions: list[str] = []
     params: list[Any] = []
 
-    def p(val: Any) -> str:
+    def p(val: object) -> str:
         params.append(val)
         return f"${len(params)}"
 
@@ -70,14 +71,16 @@ async def list_movies(
     if min_rating is not None:
         conditions.append(f"m.avg_rating >= {p(min_rating)}")
     if genres:
+        # p() only emits "$n" placeholders; values are bound by asyncpg.
         conditions.append(
-            f"EXISTS (SELECT 1 FROM movie_genres mg2 "
+            f"EXISTS (SELECT 1 FROM movie_genres mg2 "  # noqa: S608
             f"JOIN genres g2 ON g2.id = mg2.genre_id "
-            f"WHERE mg2.movie_id = m.id AND g2.slug = ANY({p(genres)}))"
+            f"WHERE mg2.movie_id = m.id AND g2.slug = ANY({p(genres)}))"  # nosec B608
         )
 
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
+    # where_clause/order_column are built from whitelisted fragments and "$n" placeholders.
     query = f"""
         SELECT
             m.id, m.title, m.year, m.avg_rating, m.rating_count, m.poster_path,
@@ -89,7 +92,7 @@ async def list_movies(
         GROUP BY m.id
         ORDER BY {order_column} DESC NULLS LAST, m.id ASC
         LIMIT {p(limit + 1)}
-    """
+    """  # noqa: S608  # nosec B608
 
     rows = await execute_query(query, *params)
     items = [_row_to_movie(r) for r in rows[:limit]]
@@ -98,7 +101,7 @@ async def list_movies(
 
 
 @router.get("/trending", response_model=list[MovieResponse])
-async def trending(request: Request, redis: Any = Depends(get_redis)) -> list[MovieResponse]:
+async def trending(request: Request, redis: Redis = Depends(get_redis)) -> list[MovieResponse]:
     cache_key = "movies:trending"
     cached = await redis.get(cache_key)
     if cached:
@@ -125,7 +128,7 @@ async def trending(request: Request, redis: Any = Depends(get_redis)) -> list[Mo
 
 @router.get("/onboarding", response_model=list[MovieResponse])
 async def onboarding_movies(
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
     limit: int = Query(40, ge=10, le=100),
 ) -> list[MovieResponse]:
     """Popular + divisive movies for cold-start rating onboarding.
@@ -219,7 +222,7 @@ async def search_movies(
 
 
 @router.get("/{movie_id}", response_model=MovieDetailResponse)
-async def get_movie(movie_id: int, redis: Any = Depends(get_redis)) -> MovieDetailResponse:
+async def get_movie(movie_id: int, redis: Redis = Depends(get_redis)) -> MovieDetailResponse:
     cache_key = f"movie:{movie_id}"
     cached = await redis.get(cache_key)
     if cached:
@@ -255,9 +258,7 @@ async def get_movie(movie_id: int, redis: Any = Depends(get_redis)) -> MovieDeta
     )
     credits = [
         CreditResponse(
-            person=PersonResponse(
-                id=c["id"], name=c["name"], profile_path=c.get("profile_path")
-            ),
+            person=PersonResponse(id=c["id"], name=c["name"], profile_path=c.get("profile_path")),
             role=c["role"],
             character_name=c.get("character_name"),
             order_index=c.get("order_index"),
@@ -304,7 +305,8 @@ async def similar_movies(
             ORDER BY m.popularity_score DESC NULLS LAST
             LIMIT $2
             """,
-            movie_id, limit,
+            movie_id,
+            limit,
         )
         return [_row_to_movie(r) for r in rows]
 
@@ -320,6 +322,7 @@ async def similar_movies(
         ORDER BY m.embedding <=> (SELECT embedding FROM movies WHERE id = $1)
         LIMIT $2
         """,
-        movie_id, limit,
+        movie_id,
+        limit,
     )
     return [_row_to_movie(r) for r in rows]

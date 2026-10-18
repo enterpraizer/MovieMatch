@@ -1,5 +1,6 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import asyncpg
 import structlog
@@ -47,27 +48,27 @@ async def get_connection() -> AsyncGenerator[asyncpg.Connection, None]:
         yield conn
 
 
-async def execute_query(query: str, *args: Any) -> list[dict[str, Any]]:
+async def execute_query(query: str, *args: object) -> list[dict[str, Any]]:
     """Execute SELECT and return all rows as list of dicts."""
     async with get_connection() as conn:
         rows = await conn.fetch(query, *args)
         return [dict(row) for row in rows]
 
 
-async def execute_one(query: str, *args: Any) -> dict[str, Any] | None:
+async def execute_one(query: str, *args: object) -> dict[str, Any] | None:
     """Execute SELECT and return first row as dict or None."""
     async with get_connection() as conn:
         row = await conn.fetchrow(query, *args)
         return dict(row) if row else None
 
 
-async def execute_write(query: str, *args: Any) -> str:
+async def execute_write(query: str, *args: object) -> str:
     """Execute INSERT/UPDATE/DELETE and return PostgreSQL status string."""
     async with get_connection() as conn:
         return str(await conn.execute(query, *args))
 
 
-async def execute_val(query: str, *args: Any) -> Any:
+async def execute_val(query: str, *args: object) -> object:
     """Execute query and return single scalar value."""
     async with get_connection() as conn:
         return await conn.fetchval(query, *args)

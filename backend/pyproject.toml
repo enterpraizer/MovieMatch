@@ -11,7 +11,7 @@ dependencies = [
   "asyncpg>=0.30.0",
   "alembic>=1.14.0",
   "redis[hiredis]>=5.2.0",
-  "python-jose[cryptography]>=3.3.0",
+  "pyjwt>=2.9.0",
   "passlib[bcrypt]>=1.7.4",
   "python-multipart>=0.0.17",
   "httpx>=0.28.0",
@@ -50,7 +50,19 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "ANN", "S", "B", "C4"]
-ignore = ["ANN101", "ANN102", "S101"]
+ignore = ["S101"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency declarations in argument defaults are idiomatic.
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Query",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Header",
+  "fastapi.Path",
+  "fastapi.Security",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN", "S"]
@@ -60,8 +72,21 @@ strict = true
 python_version = "3.12"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# Celery ships no type information, so `@app.task` is an untyped decorator.
+module = ["workers.*"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+
+[tool.coverage.run]
+# Integration tests talk to a uvicorn server started as a subprocess by
+# tests/conftest.py; measure that process too and merge its data files.
+parallel = true
+sigterm = true
+patch = ["subprocess"]
+omit = [".venv/*", "tests/*", "db/migrations/*"]

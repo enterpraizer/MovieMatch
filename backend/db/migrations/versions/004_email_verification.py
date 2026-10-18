@@ -4,6 +4,7 @@ Revision ID: 004
 Revises: 003
 Create Date: 2026-04-18
 """
+
 from alembic import op
 
 revision = "004"
@@ -14,8 +15,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TABLE users "
-        "ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE"
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE"
     )
     # Backfill: every user that predates this migration is considered verified.
     # New registrations still default to FALSE.

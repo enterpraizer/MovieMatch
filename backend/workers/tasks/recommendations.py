@@ -1,16 +1,16 @@
 import asyncio
 import os
-from typing import Any
 
 import asyncpg
 import httpx
 import numpy as np
 import structlog
+from celery import Task
 
 from workers.celery_app import app
 
 
-def _parse_vector(raw: Any, dim: int) -> np.ndarray:
+def _parse_vector(raw: object, dim: int) -> np.ndarray:
     if raw is None:
         return np.zeros(dim, dtype=np.float32)
     if isinstance(raw, str):
@@ -24,7 +24,7 @@ def _parse_vector(raw: Any, dim: int) -> np.ndarray:
     default_retry_delay=300,
     name="workers.tasks.recommendations.refresh_all_movie_embeddings",
 )
-def refresh_all_movie_embeddings(self: Any) -> None:
+def refresh_all_movie_embeddings(self: Task) -> None:
     """Trigger NLP service to re-index new/stale movie embeddings."""
     logger = structlog.get_logger()
 
@@ -39,7 +39,7 @@ def refresh_all_movie_embeddings(self: Any) -> None:
         asyncio.run(_run())
     except Exception as exc:
         logger.error("embedding_refresh_failed", error=str(exc))
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
 
 @app.task(
@@ -48,7 +48,7 @@ def refresh_all_movie_embeddings(self: Any) -> None:
     default_retry_delay=30,
     name="workers.tasks.recommendations.refresh_user_embedding",
 )
-def refresh_user_embedding(self: Any, user_id: str) -> None:
+def refresh_user_embedding(self: Task, user_id: str) -> None:
     """Recompute user embedding as weighted mean of rated-movie embeddings."""
     logger = structlog.get_logger()
 
@@ -114,4 +114,4 @@ def refresh_user_embedding(self: Any, user_id: str) -> None:
         asyncio.run(_run())
     except Exception as exc:
         logger.error("user_embedding_failed", user_id=user_id, error=str(exc))
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc

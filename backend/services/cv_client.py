@@ -22,16 +22,12 @@ async def detect_emotion(image_bytes: bytes) -> dict[str, Any]:
                     # FastAPI wraps HTTPException payloads in `{"detail": {...}}`;
                     # some handlers use `error` instead. Cover both.
                     detail = body.get("detail") or body.get("error") or {}
-                    code = (
-                        detail.get("code")
-                        if isinstance(detail, dict)
-                        else body.get("code", "")
-                    )
+                    code = detail.get("code") if isinstance(detail, dict) else body.get("code", "")
                 except Exception:
                     code = ""
                 if code == "FACE_NOT_DETECTED":
                     raise FaceNotDetectedError()
             resp.raise_for_status()
             return dict(resp.json())
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
-        raise MLServiceUnavailableError("cv")
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        raise MLServiceUnavailableError("cv") from exc

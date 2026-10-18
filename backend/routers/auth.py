@@ -1,16 +1,17 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
+import jwt
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
+from jwt import PyJWTError
+from redis.asyncio import Redis
 
 import metrics
-from jose import JWTError, jwt
-
 from config import get_settings
 from dependencies import get_current_user, get_redis
 from exceptions import (
@@ -23,6 +24,7 @@ from exceptions import (
 from schemas.auth import (
     ChangePasswordRequest,
     DeleteAccountRequest,
+    GenreCount,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
@@ -71,9 +73,7 @@ async def _issue_verification_token(user_id: str, email: str) -> None:
 
     raw, token_hash = _new_verification_token()
     settings = get_settings()
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.email_verification_ttl_minutes
-    )
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.email_verification_ttl_minutes)
     # Mark any previous unused tokens as used so an old link can't race this one.
     await execute_write(
         "UPDATE email_verification_tokens SET used_at = now() "
@@ -92,7 +92,7 @@ async def _issue_verification_token(user_id: str, email: str) -> None:
 
 def _create_jwt(user_id: str, token_type: str, expires_delta: timedelta) -> tuple[str, str]:
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     jti = str(uuid.uuid4())
     payload = {
         "sub": user_id,
@@ -114,7 +114,7 @@ def _build_tokens(user_id: str) -> TokenResponse:
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        token_type="bearer",
+        token_type="bearer",  # noqa: S106 - OAuth2 token type, not a secret
         expires_in=int(access_delta.total_seconds()),
     )
 
@@ -212,7 +212,7 @@ async def verify_email(data: VerifyEmailRequest) -> VerifyEmailResponse:
             status_code=400,
             detail={"code": "TOKEN_USED", "message": "Link was already used."},
         )
-    if row["expires_at"] < datetime.now(timezone.utc):
+    if row["expires_at"] < datetime.now(UTC):
         raise HTTPException(
             status_code=400,
             detail={"code": "TOKEN_EXPIRED", "message": "Link has expired. Request a new one."},
@@ -233,7 +233,7 @@ async def verify_email(data: VerifyEmailRequest) -> VerifyEmailResponse:
 
 @router.post("/resend-verification", status_code=204)
 async def resend_verification(
-    data: ResendVerificationRequest, redis: Any = Depends(get_redis)
+    data: ResendVerificationRequest, redis: Redis = Depends(get_redis)
 ) -> Response:
     from db.database import execute_one
 
@@ -266,15 +266,18 @@ async def resend_verification(
 async def _decode(token: str) -> dict[str, Any]:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-    except jwt.ExpiredSignatureError:
-        raise TokenExpiredError()
-    except JWTError:
-        raise TokenRevokedError()
+        payload: dict[str, Any] = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
+        return payload
+    except jwt.ExpiredSignatureError as exc:
+        raise TokenExpiredError() from exc
+    except PyJWTError as exc:
+        raise TokenRevokedError() from exc
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(data: RefreshRequest, redis: Any = Depends(get_redis)) -> TokenResponse:
+async def refresh(data: RefreshRequest, redis: Redis = Depends(get_redis)) -> TokenResponse:
     payload = await _decode(data.refresh_token)
     if payload.get("type") != "refresh":
         raise TokenRevokedError()
@@ -292,7 +295,7 @@ async def refresh(data: RefreshRequest, redis: Any = Depends(get_redis)) -> Toke
             raise TokenRevokedError()
 
     exp_ts = int(payload.get("exp", 0))
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    now_ts = int(datetime.now(UTC).timestamp())
     remaining = max(exp_ts - now_ts, 1)
     await redis.setex(f"blacklist:{jti}", remaining, "1")
 
@@ -300,7 +303,7 @@ async def refresh(data: RefreshRequest, redis: Any = Depends(get_redis)) -> Toke
 
 
 @router.post("/logout", status_code=204)
-async def logout(data: RefreshRequest, redis: Any = Depends(get_redis)) -> Response:
+async def logout(data: RefreshRequest, redis: Redis = Depends(get_redis)) -> Response:
     settings = get_settings()
     metrics.auth_events.labels(event="logout").inc()
     try:
@@ -312,11 +315,11 @@ async def logout(data: RefreshRequest, redis: Any = Depends(get_redis)) -> Respo
         )
         jti = payload.get("jti", "")
         exp_ts = int(payload.get("exp", 0))
-        now_ts = int(datetime.now(timezone.utc).timestamp())
+        now_ts = int(datetime.now(UTC).timestamp())
         remaining = max(exp_ts - now_ts, 1)
         if jti:
             await redis.setex(f"blacklist:{jti}", remaining, "1")
-    except JWTError:
+    except PyJWTError:
         pass
     return Response(status_code=204)
 
@@ -377,10 +380,11 @@ async def update_me(
 
     updates.append("updated_at = now()")
     values.append(current_user["id"])
+    # `updates` only holds fixed "column = $n" fragments built above; values are bound.
     query = (
-        f"UPDATE users SET {', '.join(updates)} WHERE id = ${idx}::uuid "
+        f"UPDATE users SET {', '.join(updates)} WHERE id = ${idx}::uuid "  # noqa: S608
         "RETURNING id::text AS id, email, display_name, avatar_url, bio, "
-        "          email_verified, created_at, last_login_at"
+        "          email_verified, created_at, last_login_at"  # nosec B608
     )
     row = await execute_one(query, *values)
     if row is None:
@@ -404,8 +408,7 @@ async def change_password(
 
     new_hash = _hash_password(data.new_password)
     await execute_one(
-        "UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2::uuid "
-        "RETURNING id",
+        "UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2::uuid RETURNING id",
         new_hash,
         current_user["id"],
     )
@@ -418,7 +421,7 @@ async def change_password(
 async def delete_me(
     data: DeleteAccountRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    redis: Any = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> Response:
     from db.database import execute_one
     from services.cache import invalidate_user
@@ -444,7 +447,7 @@ async def delete_me(
     # marker; refresh checks it against the token's iat.
     settings = get_settings()
     ttl = int(timedelta(days=settings.refresh_token_expire_days).total_seconds())
-    revoked_at = int(datetime.now(timezone.utc).timestamp())
+    revoked_at = int(datetime.now(UTC).timestamp())
     await redis.setex(f"user_revoked:{user_id}", ttl, str(revoked_at))
 
     structlog.get_logger().info("account_deleted", user_id=str(user_id))
@@ -500,9 +503,11 @@ async def get_me_stats(
 
     return UserStatsResponse(
         total_ratings=total,
-        avg_rating=float(summary["avg_score"]) if summary and summary["avg_score"] is not None else None,
+        avg_rating=(
+            float(summary["avg_score"]) if summary and summary["avg_score"] is not None else None
+        ),
         first_rated_at=summary["first_at"].isoformat() if summary and summary["first_at"] else None,
         last_rated_at=summary["last_at"].isoformat() if summary and summary["last_at"] else None,
-        top_genres=[{"slug": g["slug"], "name": g["name"], "count": g["cnt"]} for g in genres],
+        top_genres=[GenreCount(slug=g["slug"], name=g["name"], count=g["cnt"]) for g in genres],
         score_distribution=score_dist,
     )

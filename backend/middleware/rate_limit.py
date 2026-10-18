@@ -1,8 +1,9 @@
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 import structlog
 from fastapi.responses import JSONResponse
+from redis.asyncio import Redis
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -23,13 +24,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, redis_url: str) -> None:
         super().__init__(app)
         self._redis_url = redis_url
-        self._redis: Any = None
+        self._redis: Redis | None = None
 
-    async def _get_redis(self) -> Any:
+    async def _get_redis(self) -> Redis:
         if self._redis is None:
-            import redis.asyncio as aioredis
-
-            self._redis = await aioredis.from_url(self._redis_url, decode_responses=True)
+            self._redis = await Redis.from_url(self._redis_url, decode_responses=True)
         return self._redis
 
     def _get_limit(self, path: str) -> tuple[int, int]:

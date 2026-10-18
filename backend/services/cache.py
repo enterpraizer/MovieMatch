@@ -2,12 +2,14 @@ import hashlib
 import json
 from typing import Any
 
+from redis.asyncio import Redis
+
 
 def _params_key(params: dict[str, Any] | None) -> str:
     if not params:
         return "none"
     payload = json.dumps(params, sort_keys=True, default=str)
-    return hashlib.sha1(payload.encode()).hexdigest()[:16]
+    return hashlib.sha1(payload.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 def _build_key(user_id: str, endpoint: str, params: dict[str, Any] | None) -> str:
@@ -15,7 +17,7 @@ def _build_key(user_id: str, endpoint: str, params: dict[str, Any] | None) -> st
 
 
 async def get_cached(
-    redis: Any,
+    redis: Redis,
     user_id: str,
     endpoint: str,
     params: dict[str, Any] | None,
@@ -30,7 +32,7 @@ async def get_cached(
 
 
 async def set_cached(
-    redis: Any,
+    redis: Redis,
     user_id: str,
     endpoint: str,
     params: dict[str, Any] | None,
@@ -40,7 +42,7 @@ async def set_cached(
     await redis.setex(_build_key(user_id, endpoint, params), ttl, json.dumps(data, default=str))
 
 
-async def invalidate_user(redis: Any, user_id: str) -> None:
+async def invalidate_user(redis: Redis, user_id: str) -> None:
     pattern = f"reco:{user_id}:*"
     keys: list[str] = []
     async for key in redis.scan_iter(match=pattern, count=100):

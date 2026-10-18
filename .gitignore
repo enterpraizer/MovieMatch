@@ -56,3 +56,4 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 *.swp
+.coverage*
