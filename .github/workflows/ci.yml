@@ -156,6 +156,7 @@ jobs:
       packages: write
       security-events: write
     strategy:
+      fail-fast: false
       matrix:
         image:
           - name: backend
@@ -202,7 +203,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
           target: ${{ (matrix.image.name == 'backend' || matrix.image.name == 'frontend') && 'production' || '' }}
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image.name }}:sha-${{ github.sha }}
           format: sarif
