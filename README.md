@@ -2,8 +2,6 @@
 
 AI-powered movie recommendation system combining three independent ML approaches in a single web application.
 
-![CI](https://img.shields.io/badge/CI-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)
 
