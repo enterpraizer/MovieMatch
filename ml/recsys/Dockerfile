@@ -3,9 +3,11 @@ ENV PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel uv
 WORKDIR /app
 COPY pyproject.toml ./
+# CPU-only torch comes from the PyTorch index alone; everything else from PyPI alone,
+# so no package can be resolved from the "other" index.
 RUN uv pip install --system --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    --index-strategy unsafe-best-match \
+    --index-url https://download.pytorch.org/whl/cpu "torch>=2.5"
+RUN uv pip install --system --no-cache-dir \
     "fastapi>=0.115" "uvicorn[standard]" \
     "torch>=2.5" "pytorch-lightning>=2.4" \
     "asyncpg>=0.30" "mlflow>=2.18" \
