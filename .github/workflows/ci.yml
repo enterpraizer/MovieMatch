@@ -202,17 +202,21 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
           target: ${{ (matrix.image.name == 'backend' || matrix.image.name == 'frontend') && 'production' || '' }}
+      - name: Image reference
+        id: image
+        # Image names must be lowercase; github.repository keeps the owner's casing.
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.image.name }}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image.name }}:sha-${{ github.sha }}
+          image-ref: ${{ steps.image.outputs.ref }}
           format: sarif
           output: trivy-${{ matrix.image.name }}.sarif
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
       - name: Upload SARIF
-        if: always()
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.image.name)) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-${{ matrix.image.name }}.sarif
