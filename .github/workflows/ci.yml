@@ -200,7 +200,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
-          target: ${{ matrix.image.name == 'backend' || matrix.image.name == 'frontend' && 'production' || '' }}
+          target: ${{ (matrix.image.name == 'backend' || matrix.image.name == 'frontend') && 'production' || '' }}
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@0.28.0
         with:
