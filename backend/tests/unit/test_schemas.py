@@ -64,9 +64,13 @@ class TestCollaborativeRequest:
     def _rating(self) -> RatingInput:
         return RatingInput(movie_id=1, score=4.0)
 
-    def test_empty_ratings_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            CollaborativeRequest(ratings=[])
+    def test_empty_ratings_allowed(self) -> None:
+        # Empty list is valid: the endpoint falls back to the user's stored ratings.
+        r = CollaborativeRequest(ratings=[])
+        assert r.ratings == []
+
+    def test_ratings_default_empty(self) -> None:
+        assert CollaborativeRequest().ratings == []
 
     def test_one_rating_ok(self) -> None:
         r = CollaborativeRequest(ratings=[self._rating()])
