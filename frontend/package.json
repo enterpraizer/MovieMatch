@@ -13,9 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "generate-types": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/types.ts --path-params-as-types",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "generate-types": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/types.ts --path-params-as-types"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -25,7 +23,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.12.0",
     "lucide-react": "^0.460.0",
-    "next": "^14.2.18",
+    "next": "^15.5.28",
     "openapi-fetch": "^0.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -36,7 +34,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
-    "@storybook/nextjs": "^8.4.5",
     "@tailwindcss/postcss": "^4.0.0",
     "@tailwindcss/typography": "^0.5.15",
     "@testing-library/jest-dom": "^6.6.3",
@@ -46,16 +43,26 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.1.12",
     "autoprefixer": "^10.4.20",
-    "eslint": "^9.16.0",
-    "eslint-config-next": "^14.2.18",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.28",
     "jsdom": "^25.0.1",
     "openapi-typescript": "^7.4.2",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.12"
+  },
+  "pnpm": {
+    "overrides": {
+      "next>postcss": "^8.5.18"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
+    }
   }
 }
