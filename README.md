@@ -18,7 +18,7 @@ Three ways to get personalized recommendations:
 | Layer       | Technology                                                   |
 |-------------|--------------------------------------------------------------|
 | Frontend    | Next.js 14, TypeScript 5, Tailwind CSS v4, Zustand, TanStack Query, Framer Motion, Playwright |
-| Backend     | FastAPI, Pydantic v2, asyncpg, Alembic, Redis, Celery, python-jose, bcrypt |
+| Backend     | FastAPI, Pydantic v2, asyncpg, Alembic, Redis, Celery, PyJWT, bcrypt |
 | Database    | PostgreSQL 16 + pgvector (HNSW) + pg_trgm                    |
 | ML — RecSys | PyTorch Lightning (Two-Tower), MLflow for model registry     |
 | ML — NLP    | sentence-transformers, pgvector similarity, RRF hybrid search |
